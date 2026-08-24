@@ -53,6 +53,11 @@ export async function POST(req: Request, { params: paramsPromise }: { params: Pr
         select: { id: true },
       });
       if (conflict) throw new Error("One or more requested slots are unavailable.");
+      const blockConflict = await tx.calendarBlock.findFirst({
+        where: { date: requestedDate, slots: { hasSome: requestedSlots } },
+        select: { id: true },
+      });
+      if (blockConflict) throw new Error("One or more requested slots are unavailable.");
 
       const changed = await tx.booking.update({
         where: { id: booking.id },

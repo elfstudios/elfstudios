@@ -20,6 +20,14 @@ type CalendarBooking = {
   user: { name: string | null; email: string | null; phone: string | null };
 };
 
+type CalendarBlock = {
+  id: string;
+  date: Date;
+  slots: string[];
+  note: string | null;
+  googleCalendarEventId: string | null;
+};
+
 type GoogleCalendarConfig = {
   clientId: string;
   clientSecret: string;
@@ -112,6 +120,21 @@ function eventPayload(booking: CalendarBooking) {
   };
 }
 
+function blockEventPayload(block: CalendarBlock) {
+  const title = block.note ? `Jampad — Blocked — ${block.note}` : "Jampad — Blocked";
+  return {
+    summary: title,
+    description: [
+      "Manual studio block created from the Elf Jampad admin panel.",
+      block.note ? `Note: ${block.note}` : null,
+    ].filter(Boolean).join("\n"),
+    start: { dateTime: sessionStart(block.date, block.slots).toISOString(), timeZone: TIME_ZONE },
+    end: { dateTime: sessionEnd(block.date, block.slots).toISOString(), timeZone: TIME_ZONE },
+    colorId: "11",
+    extendedProperties: { private: { elfCalendarBlockId: block.id } },
+  };
+}
+
 export async function syncBookingToGoogleCalendar(booking: CalendarBooking) {
   const config = calendarConfig();
   if (!config) return { synced: false, reason: "not-configured" as const };
@@ -160,6 +183,52 @@ export async function syncBookingToGoogleCalendar(booking: CalendarBooking) {
     data: { googleCalendarEventId: event.id, googleCalendarSyncedAt: new Date() },
   });
   return { synced: true, action: "created" as const };
+}
+
+export async function syncCalendarBlockToGoogleCalendar(block: CalendarBlock) {
+  const config = calendarConfig();
+  if (!config) return { synced: false, reason: "not-configured" as const };
+
+  const calendarId = encodeURIComponent(config.calendarId);
+  const payload = blockEventPayload(block);
+  if (block.googleCalendarEventId) {
+    await calendarRequest(
+      `/calendars/${calendarId}/events/${encodeURIComponent(block.googleCalendarEventId)}?sendUpdates=none`,
+      { method: "PATCH", body: JSON.stringify(payload) },
+      config,
+    );
+    await prisma.calendarBlock.update({
+      where: { id: block.id },
+      data: { googleCalendarSyncedAt: new Date() },
+    });
+    return { synced: true, action: "updated" as const };
+  }
+
+  const response = await calendarRequest(
+    `/calendars/${calendarId}/events?sendUpdates=none`,
+    { method: "POST", body: JSON.stringify(payload) },
+    config,
+  );
+  const event = await response.json() as { id?: string };
+  if (!event.id) throw new Error("Google Calendar did not return an event ID.");
+  await prisma.calendarBlock.update({
+    where: { id: block.id },
+    data: { googleCalendarEventId: event.id, googleCalendarSyncedAt: new Date() },
+  });
+  return { synced: true, action: "created" as const };
+}
+
+export async function deleteCalendarBlockFromGoogleCalendar(block: CalendarBlock) {
+  const config = calendarConfig();
+  if (!config || !block.googleCalendarEventId) return { synced: false, reason: "no-event" as const };
+
+  const calendarId = encodeURIComponent(config.calendarId);
+  await calendarRequest(
+    `/calendars/${calendarId}/events/${encodeURIComponent(block.googleCalendarEventId)}?sendUpdates=none`,
+    { method: "DELETE" },
+    config,
+  );
+  return { synced: true, action: "deleted" as const };
 }
 
 export async function createGoogleCalendarTestEvent() {

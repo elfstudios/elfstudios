@@ -123,3 +123,17 @@ model BookingChangeRequest {
   @@index([bookingId, status])
   @@index([status, createdAt])
 }
+
+model CalendarBlock {
+  id                    String   @id @default(cuid())
+  date                  DateTime
+  slots                 String[]
+  note                  String?
+  createdBy             String
+  googleCalendarEventId String?  @unique
+  googleCalendarSyncedAt DateTime?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  @@index([date])
+}

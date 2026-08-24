@@ -64,8 +64,13 @@ export async function PATCH(req: Request, { params: paramsPromise }: { params: P
           },
           select: { id: true },
         });
-        if (conflict) throw new Error("One or more selected slots are unavailable.");
-        const changed = await tx.booking.update({ where: { id: booking.id }, data: { date: requestedDate, slots: requestedSlots } });
+      if (conflict) throw new Error("One or more selected slots are unavailable.");
+      const blockConflict = await tx.calendarBlock.findFirst({
+        where: { date: requestedDate, slots: { hasSome: requestedSlots } },
+        select: { id: true },
+      });
+      if (blockConflict) throw new Error("One or more selected slots are manually blocked.");
+      const changed = await tx.booking.update({ where: { id: booking.id }, data: { date: requestedDate, slots: requestedSlots } });
         await tx.bookingChangeRequest.create({
           data: {
             bookingId: booking.id,

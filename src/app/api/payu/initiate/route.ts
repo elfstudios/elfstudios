@@ -50,6 +50,11 @@ export async function POST(req: Request) {
         select: { id: true },
       });
       if (conflicts.length) throw new Error("One or more selected slots were just booked. Please choose again.");
+      const blockConflict = await tx.calendarBlock.findFirst({
+        where: { date, slots: { hasSome: slots } },
+        select: { id: true },
+      });
+      if (blockConflict) throw new Error("One or more selected slots are unavailable. Please choose again.");
 
       await tx.user.upsert({
         where: { id: auth.user.id },

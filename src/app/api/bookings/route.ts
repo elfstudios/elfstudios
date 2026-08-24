@@ -16,17 +16,33 @@ export async function GET(req: Request) {
       data: { status: "CANCELLED", paymentStatus: "EXPIRED", cancelledAt: now, cancelledBy: "SYSTEM" },
     });
 
-    const bookings = await prisma.booking.findMany({
-      where: {
-        date: targetDate,
-        OR: [
-          { status: "CONFIRMED" },
-          { status: "PENDING", expiresAt: { gt: now } },
-        ],
-      },
-      select: { id: true, slots: true, bandName: true },
-    });
-    return NextResponse.json({ bookings }, {
+    const [bookings, blocks] = await Promise.all([
+      prisma.booking.findMany({
+        where: {
+          date: targetDate,
+          OR: [
+            { status: "CONFIRMED" },
+            { status: "PENDING", expiresAt: { gt: now } },
+          ],
+        },
+        select: { id: true, slots: true, bandName: true },
+      }),
+      prisma.calendarBlock.findMany({
+        where: { date: targetDate },
+        select: { id: true, slots: true, note: true },
+      }),
+    ]);
+    return NextResponse.json({
+      bookings: [
+        ...bookings,
+        ...blocks.map((block) => ({
+          id: `block-${block.id}`,
+          slots: block.slots,
+          bandName: block.note || "Studio unavailable",
+          isManualBlock: true,
+        })),
+      ],
+    }, {
       headers: { "Cache-Control": "no-store" },
     });
   } catch (error) {
