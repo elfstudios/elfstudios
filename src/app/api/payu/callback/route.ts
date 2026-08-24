@@ -4,17 +4,27 @@ import { verifyHash, verifyPaymentWithPayU } from "@/lib/payu";
 import { sendBookingConfirmation } from "@/lib/mail";
 import { syncBookingToGoogleCalendar } from "@/lib/google-calendar";
 
-export async function POST(req: Request) {
+function htmlRedirect(url: string) {
+  return new NextResponse(
+    `<html><body><script>window.location.href="${url}";</script><noscript><meta http-equiv="refresh" content="0;url=${url}"></noscript></body></html>`,
+    { headers: { "Content-Type": "text/html" } },
+  );
+}
+
+async function readPayUResponse(req: Request) {
+  if (req.method === "GET") {
+    return Object.fromEntries(new URL(req.url).searchParams.entries());
+  }
+
+  return Object.fromEntries((await req.formData()).entries()) as Record<string, string>;
+}
+
+async function handleCallback(req: Request) {
   const envSiteUrl = process.env.SITE_URL ? (process.env.SITE_URL.startsWith('http') ? process.env.SITE_URL : `https://${process.env.SITE_URL}`) : null;
   const siteUrl = (envSiteUrl || new URL(req.url).origin).replace(/\/$/, "");
   try {
-    const formData = await req.formData();
-    const response = Object.fromEntries(formData.entries()) as Record<string, string>;
+    const response = await readPayUResponse(req);
     const { txnid, status, hash } = response;
-    const htmlRedirect = (url: string) => new NextResponse(
-      `<html><body><script>window.location.href="${url}";</script><noscript><meta http-equiv="refresh" content="0;url=${url}"></noscript></body></html>`,
-      { headers: { "Content-Type": "text/html" } }
-    );
 
     if (!txnid || !status || !hash || !verifyHash(response, hash)) {
       return htmlRedirect(`${siteUrl}/booking/error?reason=invalid-response`);
@@ -68,4 +78,14 @@ export async function POST(req: Request) {
       { headers: { "Content-Type": "text/html" } }
     );
   }
+}
+
+export async function POST(req: Request) {
+  return handleCallback(req);
+}
+
+// PayU can return users through a browser GET depending on its gateway flow.
+// Handle it the same as the standard form POST instead of exposing a 404 page.
+export async function GET(req: Request) {
+  return handleCallback(req);
 }
