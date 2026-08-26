@@ -39,6 +39,10 @@ function dateLabel(value: string) {
   }).format(new Date(value));
 }
 
+function isWholeDay(slots: string[]) {
+  return slots.length === HOURS.length && HOURS.every((slot) => slots.includes(slot));
+}
+
 export function CalendarBlocksManager({ initialBlocks }: Props) {
   const router = useRouter();
   const [date, setDate] = useState(todayKey());
@@ -60,11 +64,10 @@ export function CalendarBlocksManager({ initialBlocks }: Props) {
       : [...selected, slot].sort((a, b) => Number(a) - Number(b)));
   }
 
-  async function blockSlots(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  async function saveBlock(wholeDay: boolean) {
     setMessage("");
     setError("");
-    if (!slots.length) {
+    if (!wholeDay && !slots.length) {
       setError("Select at least one time slot.");
       return;
     }
@@ -74,22 +77,33 @@ export function CalendarBlocksManager({ initialBlocks }: Props) {
       const response = await fetch("/api/admin/calendar-blocks", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ date, slots, note }),
+        body: JSON.stringify({
+          date,
+          slots: wholeDay ? HOURS : slots,
+          note: wholeDay && !note.trim() ? "Holiday" : note,
+          wholeDay,
+        }),
       });
       const payload = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(payload.error || "Unable to block the selected slots.");
 
       setSlots([]);
       setNote("");
+      const subject = wholeDay ? "Full day" : "Slots";
       setMessage(payload.calendar?.synced
-        ? "Slots blocked and added to Google Calendar."
-        : `Slots blocked in the booking system. Google Calendar was not updated${payload.calendar?.reason ? `: ${payload.calendar.reason}` : "."}`);
+        ? `${subject} blocked and added to Google Calendar.`
+        : `${subject} blocked in the booking system. Google Calendar was not updated${payload.calendar?.reason ? `: ${payload.calendar.reason}` : "."}`);
       router.refresh();
     } catch (requestError) {
       setError(requestError instanceof Error ? requestError.message : "Unable to block the selected slots.");
     } finally {
       setSaving(false);
     }
+  }
+
+  async function blockSlots(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    await saveBlock(false);
   }
 
   async function removeBlock(id: string) {
@@ -118,7 +132,7 @@ export function CalendarBlocksManager({ initialBlocks }: Props) {
           <div className="rounded-xl bg-red-50 p-2 text-red-600"><Ban size={19} /></div>
           <div>
             <h2 className="font-display text-xl font-black uppercase tracking-tight">Block studio slots</h2>
-            <p className="mt-1 text-sm text-gray-500">Blocked slots cannot be booked by customers and are added to Google Calendar.</p>
+            <p className="mt-1 text-sm text-gray-500">Block individual sessions or mark a full date as a holiday. Both sync to Google Calendar.</p>
           </div>
         </div>
 
@@ -167,10 +181,21 @@ export function CalendarBlocksManager({ initialBlocks }: Props) {
         {error && <p className="mt-4 rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
         {message && <p className="mt-4 rounded-lg bg-emerald-50 px-3 py-2 text-sm text-emerald-700">{message}</p>}
 
-        <button disabled={saving} className="mt-5 inline-flex items-center gap-2 rounded-xl bg-black px-4 py-2.5 text-sm font-bold text-white transition hover:bg-elf-orange disabled:cursor-not-allowed disabled:opacity-60">
-          {saving ? <Loader2 size={16} className="animate-spin" /> : <Ban size={16} />}
-          {saving ? "Blocking…" : "Block selected slots"}
-        </button>
+        <div className="mt-5 flex flex-wrap gap-3">
+          <button disabled={saving} className="inline-flex items-center gap-2 rounded-xl bg-black px-4 py-2.5 text-sm font-bold text-white transition hover:bg-elf-orange disabled:cursor-not-allowed disabled:opacity-60">
+            {saving ? <Loader2 size={16} className="animate-spin" /> : <Ban size={16} />}
+            {saving ? "Blocking…" : "Block selected slots"}
+          </button>
+          <button
+            type="button"
+            onClick={() => saveBlock(true)}
+            disabled={saving}
+            className="inline-flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-2.5 text-sm font-bold text-red-700 transition hover:border-red-400 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {saving ? <Loader2 size={16} className="animate-spin" /> : <CalendarDays size={16} />}
+            Block entire day (holiday)
+          </button>
+        </div>
       </form>
 
       <section className="rounded-2xl border border-gray-200 bg-white p-5 shadow-sm">
@@ -188,7 +213,7 @@ export function CalendarBlocksManager({ initialBlocks }: Props) {
               <div className="flex gap-3">
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-bold text-black">{dateLabel(block.date)}</p>
-                  <p className="mt-1 text-xs font-semibold text-red-700">{block.slots.map(slotLabel).join(", ")}</p>
+                  <p className="mt-1 text-xs font-semibold text-red-700">{isWholeDay(block.slots) ? "Entire day — Holiday" : block.slots.map(slotLabel).join(", ")}</p>
                   {block.note && <p className="mt-1 text-xs text-gray-600">{block.note}</p>}
                   <p className="mt-2 text-[11px] text-gray-500">{block.googleCalendarEventId ? "Google Calendar synced" : "Google Calendar not synced"}</p>
                 </div>

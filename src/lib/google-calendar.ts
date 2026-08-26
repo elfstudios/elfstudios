@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { sessionEnd, sessionStart } from "@/lib/booking-policy";
+import { BOOKING_POLICY, sessionEnd, sessionStart, toDateKey } from "@/lib/booking-policy";
 
 const GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token";
 const GOOGLE_CALENDAR_API = "https://www.googleapis.com/calendar/v3";
@@ -121,15 +121,31 @@ function eventPayload(booking: CalendarBooking) {
 }
 
 function blockEventPayload(block: CalendarBlock) {
-  const title = block.note ? `Jampad — Blocked — ${block.note}` : "Jampad — Blocked";
+  const fullDaySlots = Array.from(
+    { length: BOOKING_POLICY.closingHour - BOOKING_POLICY.openingHour },
+    (_, index) => String(BOOKING_POLICY.openingHour + index),
+  );
+  const isWholeDay = block.slots.length === fullDaySlots.length
+    && fullDaySlots.every((slot) => block.slots.includes(slot));
+  const title = isWholeDay
+    ? `Jampad — Holiday${block.note && block.note !== "Holiday" ? ` — ${block.note}` : ""}`
+    : block.note ? `Jampad — Blocked — ${block.note}` : "Jampad — Blocked";
+  const nextDate = new Date(block.date);
+  nextDate.setUTCDate(nextDate.getUTCDate() + 1);
   return {
     summary: title,
     description: [
-      "Manual studio block created from the Elf Jampad admin panel.",
+      isWholeDay
+        ? "Full-day studio holiday created from the Elf Jampad admin panel."
+        : "Manual studio block created from the Elf Jampad admin panel.",
       block.note ? `Note: ${block.note}` : null,
     ].filter(Boolean).join("\n"),
-    start: { dateTime: sessionStart(block.date, block.slots).toISOString(), timeZone: TIME_ZONE },
-    end: { dateTime: sessionEnd(block.date, block.slots).toISOString(), timeZone: TIME_ZONE },
+    ...(isWholeDay
+      ? { start: { date: toDateKey(block.date) }, end: { date: toDateKey(nextDate) } }
+      : {
+        start: { dateTime: sessionStart(block.date, block.slots).toISOString(), timeZone: TIME_ZONE },
+        end: { dateTime: sessionEnd(block.date, block.slots).toISOString(), timeZone: TIME_ZONE },
+      }),
     colorId: "11",
     extendedProperties: { private: { elfCalendarBlockId: block.id } },
   };

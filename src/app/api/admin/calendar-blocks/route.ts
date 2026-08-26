@@ -1,10 +1,15 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireApiAdmin } from "@/lib/auth";
-import { normalizeBookingDate, sessionStart, validateSlots } from "@/lib/booking-policy";
+import { BOOKING_POLICY, normalizeBookingDate, sessionStart, validateSlots } from "@/lib/booking-policy";
 import { syncCalendarBlockToGoogleCalendar } from "@/lib/google-calendar";
 
 export const dynamic = "force-dynamic";
+
+const FULL_DAY_SLOTS = Array.from(
+  { length: BOOKING_POLICY.closingHour - BOOKING_POLICY.openingHour },
+  (_, index) => String(BOOKING_POLICY.openingHour + index),
+);
 
 export async function POST(req: Request) {
   const auth = await requireApiAdmin();
@@ -13,8 +18,9 @@ export async function POST(req: Request) {
   try {
     const body = await req.json();
     const date = normalizeBookingDate(body.date);
-    const slots = validateSlots(body.slots);
-    const note = String(body.note || "").trim().slice(0, 500) || null;
+    const wholeDay = body.wholeDay === true;
+    const slots = wholeDay ? FULL_DAY_SLOTS : validateSlots(body.slots);
+    const note = String(body.note || "").trim().slice(0, 500) || (wholeDay ? "Holiday" : null);
     if (sessionStart(date, slots) <= new Date()) {
       return NextResponse.json({ error: "Choose a future time slot to block." }, { status: 400 });
     }
