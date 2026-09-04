@@ -30,25 +30,34 @@ export type PriceBreakdown = {
   subtotalPaise: number;
   discountPaise: number;
   totalPaise: number;
+  freeHours: number;
+  billableHours: number;
 };
 
 export function calculatePrice(attendees: number, hours: number): PriceBreakdown {
   if (!Number.isInteger(attendees) || attendees < 1 || attendees > BOOKING_POLICY.maxAttendees) {
     throw new Error(`Attendees must be between 1 and ${BOOKING_POLICY.maxAttendees}.`);
   }
-  if (!Number.isInteger(hours) || hours < 1 || hours > 12) {
-    throw new Error("Select between 1 and 12 hours.");
+  if (!Number.isInteger(hours) || hours < 1 || hours > 120) {
+    throw new Error("Select between 1 and 120 hours.");
   }
 
   const pricePerHourPaise = (attendees <= 6 ? 400 : 700) * 100;
   const subtotalPaise = pricePerHourPaise * hours;
-  const discountPaise = hours >= 10 ? Math.round(subtotalPaise * 0.1) : 0;
+  // Loyalty applies to the whole checkout: every ten booked hours earns one
+  // free hour. This deliberately works across dates when customers use cart
+  // checkout rather than requiring ten consecutive hours in one session.
+  const freeHours = Math.floor(hours / 10);
+  const billableHours = hours - freeHours;
+  const discountPaise = pricePerHourPaise * freeHours;
 
   return {
     pricePerHourPaise,
     subtotalPaise,
     discountPaise,
     totalPaise: subtotalPaise - discountPaise,
+    freeHours,
+    billableHours,
   };
 }
 

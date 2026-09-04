@@ -13,35 +13,43 @@ export default async function SuccessPage({
   let ticketNumber = null;
   let bandName = null;
   let date = null;
+  let sessionCount = 0;
   const supabase = await createClient();
   const { data: { user: authUser } } = await supabase.auth.getUser();
   
   if (searchParams.txnid) {
-    const booking = await prisma.booking.findUnique({
+    const order = await prisma.bookingOrder.findUnique({
       where: { payuTxnId: searchParams.txnid },
-      select: { 
-        ticketNumber: true,
-        date: true,
-        bandName: true,
-        status: true,
-        userId: true,
-        user: {
-          select: { bandName: true, name: true }
-        }
-      }
+      select: {
+        userId: true, status: true, bandName: true,
+        bookings: { orderBy: { date: "asc" }, select: { ticketNumber: true, date: true } },
+      },
     });
-    
-    if (!booking || booking.status !== "CONFIRMED") {
-      redirect("/booking/error?reason=not-confirmed");
+    if (order) {
+      if (order.status !== "CONFIRMED" || (authUser && order.userId !== authUser.id)) {
+        redirect("/booking/error?reason=not-confirmed");
+      }
+      sessionCount = order.bookings.length;
+      ticketNumber = sessionCount === 1 ? order.bookings[0]?.ticketNumber : null;
+      bandName = order.bandName || "Musician";
+      date = order.bookings[0]?.date || null;
+    } else {
+      // Compatibility for a payment initiated before cart checkout shipped.
+      const booking = await prisma.booking.findUnique({
+        where: { payuTxnId: searchParams.txnid },
+        select: {
+          ticketNumber: true, date: true, bandName: true, status: true, userId: true,
+          user: { select: { bandName: true, name: true } },
+        },
+      });
+      if (!booking || booking.status !== "CONFIRMED" || (authUser && booking.userId !== authUser.id)) {
+        redirect("/booking/error?reason=not-confirmed");
+      }
+      sessionCount = 1;
+      ticketNumber = booking.ticketNumber;
+      bandName = booking.bandName || booking.user.bandName || booking.user.name || "Musician";
+      date = booking.date;
     }
-    
-    if (authUser && booking.userId !== authUser.id) {
-      redirect("/booking/error?reason=not-confirmed");
-    }
-
-    ticketNumber = booking.ticketNumber;
-    bandName = booking?.bandName || booking?.user?.bandName || booking?.user?.name || "Musician";
-    date = booking?.date;
   } else if (!authUser) {
     redirect("/login");
   }
@@ -64,7 +72,7 @@ export default async function SuccessPage({
           </h1>
           
           <p className="font-sans text-white/60 text-sm md:text-base font-light mb-10 max-w-md mx-auto leading-relaxed">
-            {bandName}, your jam session is locked and loaded. We’ve received your payment and your slots are secured. See you at the pad.
+            {bandName}, your {sessionCount > 1 ? `${sessionCount} jam sessions are` : "jam session is"} locked and loaded. We’ve received your payment and your slots are secured. See you at the pad.
           </p>
           
           {ticketNumber && (
@@ -81,6 +89,12 @@ export default async function SuccessPage({
                   <div className="h-[2px] flex-1 bg-gradient-to-l from-transparent to-elf-orange/30"></div>
                 </div>
               </div>
+            </div>
+          )}
+
+          {sessionCount > 1 && (
+            <div className="mt-2 rounded-xl border border-white/10 bg-black/30 px-5 py-4 font-mono text-xs uppercase tracking-widest text-white/70">
+              {sessionCount} sessions confirmed — tickets are in your email and My Bookings.
             </div>
           )}
 

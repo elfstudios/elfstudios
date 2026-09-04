@@ -1,14 +1,14 @@
 import React, { useState } from "react";
 import { format } from "date-fns";
+import type { CartSession } from "./BookingFlow";
 
 interface Step5Props {
   attendees: number;
-  hours: number;
   date: Date | null;
   slots: string[];
+  sessions: CartSession[];
   bandName: string;
   equipmentRequests: string;
-  ticketNumber: string;
   onNext: () => void;
   onBack: () => void;
   onCancel: () => void;
@@ -16,20 +16,22 @@ interface Step5Props {
 
 export function Step5Summary({ 
   attendees, 
-  hours, 
   date,
   slots,
+  sessions,
   bandName,
   equipmentRequests,
-  ticketNumber,
   onNext, 
   onBack, 
   onCancel 
 }: Step5Props) {
   const [loading, setLoading] = useState(false);
+  const cartSessions = sessions.length ? sessions : (date && slots.length ? [{ date, slots }] : []);
+  const totalHours = cartSessions.reduce((total, session) => total + session.slots.length, 0);
   const pricePerHour = attendees <= 6 ? 400 : 700;
-  const subtotal = pricePerHour * hours;
-  const discount = hours >= 10 ? Math.round(subtotal * 0.1) : 0;
+  const subtotal = pricePerHour * totalHours;
+  const freeHours = Math.floor(totalHours / 10);
+  const discount = freeHours * pricePerHour;
   const total = subtotal - discount;
 
   const handlePayment = async () => {
@@ -40,12 +42,12 @@ export function Step5Summary({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           attendees,
-          totalAmount: total,
           bandName,
           equipmentRequests,
-          date: date ? format(date, "yyyy-MM-dd") : undefined,
-          slots,
-          ticketNumber
+          sessions: cartSessions.map((session) => ({
+            date: format(session.date, "yyyy-MM-dd"),
+            slots: session.slots,
+          })),
         }),
       });
 
@@ -83,8 +85,7 @@ export function Step5Summary({
     }
   };
 
-  const formattedDate = date ? format(date, "MMMM do, yyyy") : "Not selected";
-  const formattedSlots = slots.map(s => {
+  const formattedSlots = (sessionSlots: string[]) => sessionSlots.map(s => {
     const i = parseInt(s);
     const ampm1 = i >= 12 ? "PM" : "AM";
     const hour1 = i > 12 ? i - 12 : i;
@@ -108,8 +109,8 @@ export function Step5Summary({
       <div className="bg-white/5 backdrop-blur-md rounded-xl border border-white/10 shadow-inner overflow-hidden">
         {/* Ticket Header */}
         <div className="bg-white/10 p-4 flex justify-between items-center border-b border-white/10 border-dashed">
-          <span className="font-mono text-[11px] text-white/60 uppercase tracking-widest">TICKET NO.</span>
-          <span className="font-display text-xl text-elf-orange font-bold tracking-wider">{ticketNumber}</span>
+          <span className="font-mono text-[11px] text-white/60 uppercase tracking-widest">CHECKOUT</span>
+          <span className="font-display text-sm text-elf-orange font-bold tracking-wider">{cartSessions.length} SESSION{cartSessions.length === 1 ? "" : "S"}</span>
         </div>
 
         <div className="p-6 space-y-4">
@@ -118,11 +119,15 @@ export function Step5Summary({
             <span className="font-display text-[15px] uppercase text-white font-bold text-right">{bandName}</span>
           </div>
 
-          <div className="flex justify-between border-b border-white/10 pb-4">
-            <span className="font-mono text-[11px] text-white/40 uppercase tracking-widest">Date & Time</span>
-            <div className="text-right">
-              <span className="font-display text-[15px] uppercase text-white font-bold block">{formattedDate}</span>
-              <span className="font-mono text-[11px] text-white/60 uppercase tracking-widest mt-1 block">Slots: {formattedSlots}</span>
+          <div className="border-b border-white/10 pb-4">
+            <span className="font-mono text-[11px] text-white/40 uppercase tracking-widest">Sessions</span>
+            <div className="mt-3 space-y-2">
+              {cartSessions.map((session) => (
+                <div key={session.date.toISOString()} className="flex items-start justify-between gap-4 rounded-lg bg-black/20 px-3 py-2">
+                  <span className="font-display text-[13px] uppercase text-white font-bold">{format(session.date, "MMM do, yyyy")}</span>
+                  <span className="max-w-[60%] text-right font-mono text-[10px] uppercase tracking-widest text-white/60">{formattedSlots(session.slots)}</span>
+                </div>
+              ))}
             </div>
           </div>
           
@@ -144,10 +149,10 @@ export function Step5Summary({
             <span className="font-mono text-[11px] text-white/40 uppercase tracking-widest">Total (Advance)</span>
             <div className="text-right">
               <span className="font-display text-4xl text-white font-black drop-shadow-md">₹{total}</span>
-              <p className="font-mono text-[10px] text-white/40 mt-1 uppercase tracking-widest">₹{pricePerHour}/hr × {hours} hrs</p>
+              <p className="font-mono text-[10px] text-white/40 mt-1 uppercase tracking-widest">₹{pricePerHour}/hr × {totalHours} hrs</p>
             </div>
           </div>
-          {discount > 0 && <p className="text-right font-mono text-[10px] uppercase tracking-widest text-green-400">10-hour discount: −₹{discount}</p>}
+          {discount > 0 && <p className="text-right font-mono text-[10px] uppercase tracking-widest text-green-400">Loyalty reward: {freeHours} free hour{freeHours === 1 ? "" : "s"} · −₹{discount}</p>}
         </div>
       </div>
 

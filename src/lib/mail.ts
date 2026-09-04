@@ -142,6 +142,68 @@ export async function sendBookingConfirmation(booking: any, userEmail: string) {
   }
 }
 
+export async function sendOrderConfirmation(order: any, bookings: any[], userEmail: string) {
+  if (bookings.length === 1) {
+    return sendBookingConfirmation(bookings[0], userEmail);
+  }
+  if (!SMTP_EMAIL || !SMTP_PASSWORD) {
+    console.warn("SMTP credentials not configured. Skipping email.");
+    return;
+  }
+
+  const sessions = bookings.map((booking) => {
+    const times = (booking.slots as string[]).map((slot) => {
+      const hour = Number(slot);
+      const display = (value: number) => `${value % 12 || 12}:00 ${value >= 12 ? "PM" : "AM"}`;
+      return `${display(hour)}–${display(hour + 1)}`;
+    }).join(", ");
+    return `<tr>
+      <td style="padding:12px 0;border-bottom:1px solid #333"><strong>${escapeHtml(format(new Date(booking.date), "EEE, MMM d, yyyy"))}</strong><br/><span style="color:#aaa">${escapeHtml(times)}</span></td>
+      <td style="padding:12px 0;border-bottom:1px solid #333;text-align:right;color:#ff6600;font-weight:bold">${escapeHtml(booking.ticketNumber || "—")}</td>
+    </tr>`;
+  }).join("");
+  const safeBand = escapeHtml(order.bandName || "Jam Session");
+  const safeName = escapeHtml(order.user?.name || "Musician");
+  const total = Number(order.totalAmount).toLocaleString("en-IN");
+  const loyalty = order.freeHours > 0
+    ? `<p style="margin:16px 0 0;color:#86efac">Loyalty credit applied: ${order.freeHours} free hour${order.freeHours === 1 ? "" : "s"}.</p>`
+    : "";
+  const html = `
+    <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;background:#111;color:#fff;border:1px solid #333;border-radius:12px;overflow:hidden">
+      <div style="padding:28px;text-align:center;background:#000;border-bottom:2px solid #ff6600"><h1 style="margin:0;color:#ff6600;letter-spacing:2px">ELF STUDIOS</h1></div>
+      <div style="padding:30px"><h2 style="color:#86efac;margin-top:0">Your sessions are confirmed!</h2>
+        <p>Hey ${safeName}, we have received payment for <strong>${safeBand}</strong>. All ${bookings.length} sessions below are secured.</p>
+        <table style="width:100%;border-collapse:collapse;margin-top:20px"><thead><tr><th style="text-align:left;color:#aaa;font-size:12px">DATE & TIME</th><th style="text-align:right;color:#aaa;font-size:12px">TICKET</th></tr></thead><tbody>${sessions}</tbody></table>
+        ${loyalty}
+        <p style="font-size:22px;font-weight:bold;text-align:right;margin-top:26px">Paid: <span style="color:#86efac">₹${total}</span></p>
+      </div>
+    </div>`;
+  const adminHtml = `
+    <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto"><h2 style="color:#ff6600">New multi-session booking: ${safeBand}</h2>
+      <p><strong>Customer:</strong> ${safeName} (${escapeHtml(userEmail)})</p>
+      <p><strong>Paid:</strong> ₹${total}${order.freeHours ? ` · ${order.freeHours} loyalty free hour${order.freeHours === 1 ? "" : "s"}` : ""}</p>
+      <table style="width:100%;border-collapse:collapse"><tbody>${sessions.replaceAll("#333", "#eee")}</tbody></table>
+    </div>`;
+  try {
+    await transporter.sendMail({
+      from: `"Elf Studios" <${SMTP_EMAIL}>`,
+      to: userEmail,
+      subject: `${bookings.length} sessions confirmed - Elf Jampad`,
+      html,
+    });
+    if (ADMIN_EMAILS) {
+      await transporter.sendMail({
+        from: `"Elf Studios System" <${SMTP_EMAIL}>`,
+        to: ADMIN_EMAILS.split(",").map((email) => email.trim()),
+        subject: `NEW MULTI-SESSION BOOKING: ${order.bandName || "Elf Jampad"}`,
+        html: adminHtml,
+      });
+    }
+  } catch (error) {
+    console.error("Error sending multi-session booking email:", error);
+  }
+}
+
 export async function sendBookingChangeNotification(
   booking: any,
   userEmail: string,

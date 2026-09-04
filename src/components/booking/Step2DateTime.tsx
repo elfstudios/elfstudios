@@ -15,25 +15,30 @@ import {
   startOfDay
 } from "date-fns";
 import { ChevronLeft, ChevronRight } from "lucide-react";
+import type { CartSession } from "./BookingFlow";
 
 interface Step2Props {
   onNext: () => void;
   onBack: () => void;
-  setHours: (hours: number) => void;
   date: Date | null;
   setDate: (date: Date) => void;
   selectedSlots: string[];
   setSelectedSlots: (slots: string[]) => void;
+  sessions: CartSession[];
+  onAddSession: (date: Date, slots: string[]) => void;
+  onRemoveSession: (date: Date) => void;
 }
 
 export function Step2DateTime({ 
   onNext, 
   onBack, 
-  setHours, 
   date, 
   setDate, 
   selectedSlots, 
-  setSelectedSlots 
+  setSelectedSlots,
+  sessions,
+  onAddSession,
+  onRemoveSession,
 }: Step2Props) {
   const [currentMonth, setCurrentMonth] = useState<Date>(date ? startOfMonth(date) : startOfMonth(new Date()));
   const [bookedSlots, setBookedSlots] = useState<Record<string, string>>({}); // slotId -> bandName
@@ -124,9 +129,18 @@ export function Step2DateTime({
   };
 
   const handleContinue = () => {
-    if (!date) setDate(activeDate); // If they never clicked a date but just picked a slot for today
-    setHours(selectedSlots.length);
+    if (selectedSlots.length) {
+      const selectedDate = date || activeDate;
+      if (!date) setDate(selectedDate);
+      onAddSession(selectedDate, selectedSlots);
+    }
     onNext();
+  };
+
+  const handleAddSession = () => {
+    const selectedDate = date || activeDate;
+    if (!date) setDate(selectedDate);
+    onAddSession(selectedDate, selectedSlots);
   };
 
   // Calendar logic
@@ -152,6 +166,26 @@ export function Step2DateTime({
           Pick a date from the calendar and choose available 1-hour slots.
         </p>
       </div>
+
+      {sessions.length > 0 && (
+        <div className="rounded-xl border border-elf-orange/30 bg-elf-orange/10 p-4">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <p className="font-mono text-[10px] uppercase tracking-widest text-elf-orange">Checkout cart</p>
+              <p className="mt-1 text-xs text-white/60">{sessions.length} date{sessions.length === 1 ? "" : "s"} · {sessions.reduce((total, session) => total + session.slots.length, 0)} hour(s) added</p>
+            </div>
+            <span className="rounded-full bg-elf-orange px-3 py-1 font-mono text-[10px] font-bold text-black">ONE CHECKOUT</span>
+          </div>
+          <div className="mt-3 space-y-2">
+            {sessions.map((session) => (
+              <div key={session.date.toISOString()} className="flex items-center justify-between gap-3 rounded-lg bg-black/25 px-3 py-2">
+                <span className="text-xs text-white"><strong>{format(session.date, "EEE, MMM d")}</strong><span className="text-white/50"> · {session.slots.length} hr{session.slots.length === 1 ? "" : "s"}</span></span>
+                <button type="button" onClick={() => onRemoveSession(session.date)} className="font-mono text-[10px] uppercase tracking-widest text-white/50 hover:text-red-300">Remove</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="flex flex-col lg:flex-row gap-6 lg:gap-12 w-full">
         
@@ -273,14 +307,21 @@ export function Step2DateTime({
           Back
         </button>
         <div className="flex-1 text-center font-mono text-[10px] text-white/50 uppercase tracking-widest">
-          {selectedSlots.length} hr(s) selected
+          {selectedSlots.length ? `${selectedSlots.length} hr(s) ready to add` : sessions.length ? "Add another date or continue" : "Choose your first session"}
         </div>
+        <button
+          onClick={handleAddSession}
+          disabled={selectedSlots.length === 0}
+          className="h-[50px] px-5 bg-elf-orange/15 text-elf-orange border border-elf-orange/40 hover:bg-elf-orange hover:text-black font-bold tracking-widest uppercase transition-all rounded-xl text-[10px] disabled:opacity-40"
+        >
+          Add to cart
+        </button>
         <button 
           onClick={handleContinue} 
-          disabled={selectedSlots.length === 0} 
+          disabled={selectedSlots.length === 0 && sessions.length === 0}
           className="h-[50px] px-8 bg-white text-black hover:bg-white/90 font-bold tracking-widest uppercase transition-all rounded-xl text-xs shadow-sm transform hover:-translate-y-0.5 disabled:opacity-50 disabled:hover:translate-y-0"
         >
-          Continue
+          {sessions.length ? "Continue" : "Add & continue"}
         </button>
       </div>
     </div>

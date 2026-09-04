@@ -16,11 +16,14 @@ test("pricing follows attendee bands", () => {
   assert.equal(calculatePrice(7, 1).totalPaise, 70_000);
 });
 
-test("ten hours receives a ten percent discount", () => {
+test("every ten booked hours earns one free hour", () => {
   const result = calculatePrice(5, 10);
   assert.equal(result.subtotalPaise, 400_000);
   assert.equal(result.discountPaise, 40_000);
   assert.equal(result.totalPaise, 360_000);
+  assert.equal(result.freeHours, 1);
+  assert.equal(calculatePrice(5, 20).totalPaise, 720_000);
+  assert.equal(calculatePrice(5, 20).freeHours, 2);
 });
 
 test("slot validation rejects duplicates and invalid hours", () => {

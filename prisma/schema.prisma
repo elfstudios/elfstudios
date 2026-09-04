@@ -54,6 +54,7 @@ model User {
   accounts      Account[]
   sessions      Session[]
   bookings      Booking[]
+  bookingOrders BookingOrder[]
 }
 
 model VerificationToken {
@@ -69,6 +70,8 @@ model Booking {
   id               String   @id @default(cuid())
   userId           String
   user             User     @relation(fields: [userId], references: [id])
+  orderId          String?
+  order            BookingOrder? @relation(fields: [orderId], references: [id])
   
   attendees        Int
   date             DateTime // The date of the jam session
@@ -99,6 +102,36 @@ model Booking {
 
   @@index([date, status])
   @@index([userId, date])
+  @@index([orderId])
+  @@index([expiresAt])
+}
+
+// A single PayU checkout can reserve multiple sessions. Individual Booking
+// records remain the source of truth for availability, cancellations and
+// calendar events, while this model owns the shared payment and loyalty data.
+model BookingOrder {
+  id                String   @id @default(cuid())
+  userId            String
+  user              User     @relation(fields: [userId], references: [id])
+  attendees         Int
+  bandName          String?
+  equipmentRequests String?
+  totalAmount       Float
+  totalHours        Int
+  freeHours         Int      @default(0)
+  status            String   @default("PENDING") // PENDING, CONFIRMED, CANCELLED
+  paymentStatus     String   @default("UNPAID") // UNPAID, PENDING, PAID, FAILED, EXPIRED
+  payuTxnId         String?  @unique
+  payuPaymentId     String?
+  paidAt            DateTime?
+  expiresAt         DateTime?
+  cancelledAt       DateTime?
+  cancelledBy       String?
+  bookings          Booking[]
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([userId, createdAt])
   @@index([expiresAt])
 }
 

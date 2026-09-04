@@ -8,6 +8,7 @@ type Booking = {
   id: string; bandName: string | null; ticketNumber: string | null; attendees: number;
   date: string; slots: string[]; totalAmount: number; status: string; paymentStatus: string;
   equipmentRequests: string | null;
+  order: { totalHours: number; freeHours: number } | null;
   user: { name: string | null; email: string | null; phone: string | null };
   history: { id: string; type: string; reason: string | null; createdAt: string }[];
 };
@@ -71,6 +72,7 @@ export function AdminBookingsClient({ initialBookings }: { initialBookings: Book
             <div className="mt-5 grid gap-3 text-sm text-gray-600 sm:grid-cols-2">
               <p className="flex gap-2"><CalendarDays className="h-4 w-4 text-orange-500"/>{displayDate(booking.date)}</p><p className="flex gap-2"><Clock className="h-4 w-4 text-orange-500"/>{booking.slots.map(slotLabel).join(", ")}</p><p className="flex gap-2"><Users className="h-4 w-4 text-orange-500"/>{booking.attendees} · ₹{booking.totalAmount.toLocaleString("en-IN")}</p><p className="flex gap-2"><Phone className="h-4 w-4 text-orange-500"/>{booking.user.phone || "No phone"}</p><p className="flex gap-2 sm:col-span-2"><Mail className="h-4 w-4 text-orange-500"/>{booking.user.email || "No email"}</p>
             </div>
+            {booking.order && <p className="mt-4 rounded-xl bg-orange-50 px-3 py-2 text-xs font-medium text-orange-800">Cart checkout · {booking.order.totalHours} total hour{booking.order.totalHours === 1 ? "" : "s"}{booking.order.freeHours ? ` · ${booking.order.freeHours} loyalty free hour${booking.order.freeHours === 1 ? "" : "s"}` : ""}</p>}
             {booking.status === "CONFIRMED" && <div className="mt-5 grid grid-cols-2 gap-3"><button onClick={() => open(booking, "RESCHEDULE")} className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-black text-xs font-bold text-white"><RotateCcw className="h-4 w-4"/>Reschedule</button><button onClick={() => open(booking, "CANCEL")} className="flex min-h-11 items-center justify-center gap-2 rounded-xl border border-red-200 text-xs font-bold text-red-600"><XCircle className="h-4 w-4"/>Cancel</button></div>}
           </article>
         ))}

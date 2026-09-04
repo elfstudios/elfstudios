@@ -7,19 +7,38 @@ import { Step4Details } from "./Step4Details";
 import { Step5Summary } from "./Step5Summary";
 import Image from "next/image";
 
+export type CartSession = { date: Date; slots: string[] };
+
 export function BookingFlow() {
   const [step, setStep] = useState(1);
   const [attendees, setAttendees] = useState(0);
-  const [hours, setHours] = useState(1);
-  
   const [date, setDate] = useState<Date | null>(null);
   const [selectedSlots, setSelectedSlots] = useState<string[]>([]);
+  const [sessions, setSessions] = useState<CartSession[]>([]);
   const [bandName, setBandName] = useState("");
   const [equipmentRequests, setEquipmentRequests] = useState("");
-  const ticketNumber = "Assigned after payment";
   
   const handleNext = () => setStep((s) => Math.min(s + 1, 4));
   const handleBack = () => setStep((s) => Math.max(s - 1, 1));
+  const addSession = (sessionDate: Date, slots: string[]) => {
+    setSessions((current) => {
+      const key = sessionDate.toISOString().slice(0, 10);
+      const existing = current.find((session) => session.date.toISOString().slice(0, 10) === key);
+      if (existing) {
+        return current.map((session) => session === existing
+          ? { ...session, slots: [...new Set([...session.slots, ...slots])].sort((a, b) => Number(a) - Number(b)) }
+          : session,
+        );
+      }
+      return [...current, { date: sessionDate, slots: [...slots].sort((a, b) => Number(a) - Number(b)) }]
+        .sort((a, b) => a.date.getTime() - b.date.getTime());
+    });
+    setSelectedSlots([]);
+  };
+  const removeSession = (sessionDate: Date) => {
+    const key = sessionDate.toISOString().slice(0, 10);
+    setSessions((current) => current.filter((session) => session.date.toISOString().slice(0, 10) !== key));
+  };
 
   const steps = ["Attendees", "Date & Time", "Details", "Checkout"];
 
@@ -89,11 +108,13 @@ export function BookingFlow() {
                 <Step2DateTime 
                   onNext={handleNext} 
                   onBack={handleBack} 
-                  setHours={setHours} 
                   date={date}
                   setDate={setDate}
                   selectedSlots={selectedSlots}
                   setSelectedSlots={setSelectedSlots}
+                  sessions={sessions}
+                  onAddSession={addSession}
+                  onRemoveSession={removeSession}
                 />
               )}
 
@@ -111,12 +132,11 @@ export function BookingFlow() {
               {step === 4 && (
                 <Step5Summary 
                   attendees={attendees} 
-                  hours={hours}
                   date={date}
                   slots={selectedSlots}
+                  sessions={sessions}
                   bandName={bandName}
                   equipmentRequests={equipmentRequests}
-                  ticketNumber={ticketNumber}
                   onNext={() => {}} // Will be handled inside Step5Summary
                   onBack={handleBack} 
                   onCancel={() => window.location.href = "https://www.elfstudios.in/elf-jampad"} 
