@@ -16,6 +16,7 @@ export function BookingFlow() {
   const [selectedSlots, setSelectedSlots] = useState<string[]>([]);
   const [sessions, setSessions] = useState<CartSession[]>([]);
   const [bandName, setBandName] = useState("");
+  const [bookingName, setBookingName] = useState("");
   const [equipmentRequests, setEquipmentRequests] = useState("");
   
   const handleNext = () => setStep((s) => Math.min(s + 1, 4));
@@ -124,6 +125,8 @@ export function BookingFlow() {
                   onBack={handleBack} 
                   bandName={bandName}
                   setBandName={setBandName}
+                  bookingName={bookingName}
+                  setBookingName={setBookingName}
                   equipmentRequests={equipmentRequests}
                   setEquipmentRequests={setEquipmentRequests}
                 />
@@ -136,6 +139,7 @@ export function BookingFlow() {
                   slots={selectedSlots}
                   sessions={sessions}
                   bandName={bandName}
+                  bookingName={bookingName}
                   equipmentRequests={equipmentRequests}
                   onNext={() => {}} // Will be handled inside Step5Summary
                   onBack={handleBack} 

@@ -12,6 +12,7 @@ type CalendarBooking = {
   slots: string[];
   ticketNumber: string | null;
   bandName: string | null;
+  bookingName?: string | null;
   equipmentRequests: string | null;
   totalAmount: number;
   status: string;
@@ -102,6 +103,7 @@ function eventPayload(booking: CalendarBooking) {
   const lines = [
     `Ticket: ${booking.ticketNumber || booking.id}`,
     `Customer: ${customerName}`,
+    booking.bookingName ? `Booking name: ${booking.bookingName}` : null,
     booking.user.email ? `Email: ${booking.user.email}` : null,
     booking.user.phone ? `Phone: ${booking.user.phone}` : null,
     `Attendees: ${booking.attendees}`,

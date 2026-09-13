@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { verifyHash, verifyPaymentWithPayU } from "@/lib/payu";
 import { sendBookingConfirmation, sendOrderConfirmation } from "@/lib/mail";
 import { syncBookingToGoogleCalendar } from "@/lib/google-calendar";
+import { confirmWalletTopUp } from "@/lib/wallet";
 
 function htmlRedirect(url: string) {
   return new NextResponse(
@@ -59,6 +60,22 @@ async function handleCallback(req: Request) {
     const { txnid, status, hash } = response;
     if (!txnid || !status || !hash || !verifyHash(response, hash)) {
       return htmlRedirect(`${siteUrl}/booking/error?reason=invalid-response`);
+    }
+
+    if (response.udf2 === "WALLET_TOPUP") {
+      const topUp = await prisma.walletTopUp.findUnique({ where: { payuTxnId: txnid } });
+      if (!topUp || response.udf1 !== topUp.id || Number(response.amount) !== Number(topUp.amount)) {
+        return htmlRedirect(`${siteUrl}/booking/error?reason=payment-mismatch`);
+      }
+      if (status === "success") {
+        if (!await verifyPaymentWithPayU(txnid, Number(topUp.amount).toFixed(2))) {
+          return htmlRedirect(`${siteUrl}/booking/error?reason=verification-pending`);
+        }
+        await confirmWalletTopUp(topUp.id, response.mihpayid);
+        return htmlRedirect(`${siteUrl}/wallet?topup=success`);
+      }
+      if (status !== "pending") await prisma.walletTopUp.updateMany({ where: { id: topUp.id, status: "PENDING" }, data: { status: "FAILED" } });
+      return htmlRedirect(`${siteUrl}/wallet${status === "pending" ? "?topup=pending" : "?topup=failed"}`);
     }
 
     const order = await prisma.bookingOrder.findUnique({ where: { payuTxnId: txnid } });

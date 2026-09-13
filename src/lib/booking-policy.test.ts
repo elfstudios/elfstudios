@@ -13,7 +13,9 @@ test("pricing follows attendee bands", () => {
   assert.equal(calculatePrice(1, 1).totalPaise, 40_000);
   assert.equal(calculatePrice(5, 2).totalPaise, 80_000);
   assert.equal(calculatePrice(6, 2).totalPaise, 80_000);
-  assert.equal(calculatePrice(7, 1).totalPaise, 70_000);
+  assert.equal(calculatePrice(7, 1).totalPaise, 50_000);
+  assert.equal(calculatePrice(8, 1).totalPaise, 60_000);
+  assert.equal(calculatePrice(10, 1).totalPaise, 80_000);
 });
 
 test("every ten booked hours earns one free hour", () => {

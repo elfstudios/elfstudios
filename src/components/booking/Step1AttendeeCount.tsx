@@ -18,9 +18,7 @@ export function Step1AttendeeCount({
       setPrice(0);
     } else if (attendees <= 6) {
       setPrice(400);
-    } else {
-      setPrice(700);
-    }
+    } else setPrice(400 + (attendees - 6) * 100);
   }, [attendees]);
 
   return (
@@ -62,7 +60,7 @@ export function Step1AttendeeCount({
               ? "Enter your group size to see the rate."
               : attendees <= 6
               ? "Flat rate for up to 6 members."
-              : "Flat rate for 7-10 members."}
+              : `₹400 + ₹100 per member after 6.`}
           </p>
         </div>
         <div className="text-right">

@@ -91,6 +91,7 @@ export default function BookPage() {
           >
             My Bookings
           </a>
+          <a href="/wallet" className="min-h-11 flex items-center text-[10px] font-mono text-white/70 hover:text-white uppercase tracking-widest transition-colors">My Wallet</a>
           <div className="flex items-center gap-4">
             <span className="font-mono text-[10px] text-gray-500 uppercase tracking-widest hidden sm:inline">
               {user.email?.split("@")[0]}

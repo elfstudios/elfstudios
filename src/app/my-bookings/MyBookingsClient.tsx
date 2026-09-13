@@ -20,6 +20,7 @@ type ChangeRequest = {
 type Booking = {
   id: string;
   bandName: string | null;
+  bookingName: string | null;
   ticketNumber: string | null;
   attendees: number;
   date: string;
@@ -157,6 +158,7 @@ export function MyBookingsClient({ initialBookings, email, policy }: {
                   <div>
                     <p className="text-xs uppercase tracking-[0.2em] text-orange-400">{booking.ticketNumber || "Booking"}</p>
                     <h2 className="mt-1 text-2xl font-black">{booking.bandName || "Jam Session"}</h2>
+                    {booking.bookingName && <p className="mt-1 text-xs text-white/50">Booked by {booking.bookingName}</p>}
                   </div>
                   <span className={`rounded-full px-3 py-1 text-[10px] font-bold uppercase ${confirmed ? "bg-green-500/15 text-green-300" : booking.status === "CANCELLED" ? "bg-red-500/15 text-red-300" : "bg-yellow-500/15 text-yellow-200"}`}>{booking.status}</span>
                 </div>

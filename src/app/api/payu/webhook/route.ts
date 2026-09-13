@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { verifyHash } from "@/lib/payu";
 import { sendBookingConfirmation, sendOrderConfirmation } from "@/lib/mail";
 import { syncBookingToGoogleCalendar } from "@/lib/google-calendar";
+import { confirmWalletTopUp } from "@/lib/wallet";
 
 async function confirmOrder(orderId: string, paymentId: string | undefined) {
   const order = await prisma.$transaction(async (tx) => {
@@ -31,6 +32,16 @@ export async function POST(req: Request) {
     const { txnid, status, hash } = response;
     if (!txnid || !status || !hash) return NextResponse.json({ error: "Missing parameters" }, { status: 400 });
     if (!verifyHash(response, hash)) return NextResponse.json({ error: "Invalid hash" }, { status: 403 });
+
+    if (response.udf2 === "WALLET_TOPUP") {
+      const topUp = await prisma.walletTopUp.findUnique({ where: { payuTxnId: txnid } });
+      if (!topUp || response.udf1 !== topUp.id || Number(response.amount) !== Number(topUp.amount)) {
+        return NextResponse.json({ error: "Transaction mismatch" }, { status: 409 });
+      }
+      if (status === "success") await confirmWalletTopUp(topUp.id, response.mihpayid);
+      else if (status !== "pending") await prisma.walletTopUp.updateMany({ where: { id: topUp.id, status: "PENDING" }, data: { status: "FAILED" } });
+      return NextResponse.json({ status: "ok" });
+    }
 
     const order = await prisma.bookingOrder.findUnique({ where: { payuTxnId: txnid } });
     if (order) {

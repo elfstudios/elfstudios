@@ -28,7 +28,7 @@ export async function sendBookingConfirmation(booking: any, userEmail: string) {
     return;
   }
 
-  const { ticketNumber, bandName, date, slots, totalAmount, equipmentRequests, user } = booking;
+  const { ticketNumber, bandName, bookingName, date, slots, totalAmount, equipmentRequests, user } = booking;
   const formattedDate = format(new Date(date), "EEEE, MMMM d, yyyy");
   
   // Convert slot strings to readable times (e.g. "10" -> "10:00 AM - 11:00 AM")
@@ -45,6 +45,7 @@ export async function sendBookingConfirmation(booking: any, userEmail: string) {
   const userPhone = user?.phone || "Not provided";
   const safeUserName = escapeHtml(userName);
   const safeBandName = escapeHtml(bandName);
+  const safeBookingName = escapeHtml(bookingName || user?.name || "Musician");
   const safeTicketNumber = escapeHtml(ticketNumber);
   const safeEquipmentRequests = escapeHtml(equipmentRequests);
   const safeUserEmail = escapeHtml(userEmail);
@@ -106,6 +107,7 @@ export async function sendBookingConfirmation(booking: any, userEmail: string) {
       <table style="width: 100%; border-collapse: collapse; margin-top: 20px;">
         <tr><td style="padding: 8px; border-bottom: 1px solid #eee; font-weight: bold; width: 150px;">Ticket No:</td><td style="padding: 8px; border-bottom: 1px solid #eee;">${safeTicketNumber}</td></tr>
         <tr><td style="padding: 8px; border-bottom: 1px solid #eee; font-weight: bold;">Band Name:</td><td style="padding: 8px; border-bottom: 1px solid #eee;">${safeBandName}</td></tr>
+        <tr><td style="padding: 8px; border-bottom: 1px solid #eee; font-weight: bold;">Booking Name:</td><td style="padding: 8px; border-bottom: 1px solid #eee;">${safeBookingName}</td></tr>
         <tr><td style="padding: 8px; border-bottom: 1px solid #eee; font-weight: bold;">Booked By:</td><td style="padding: 8px; border-bottom: 1px solid #eee;">${safeUserName} (${safeUserEmail})</td></tr>
         <tr><td style="padding: 8px; border-bottom: 1px solid #eee; font-weight: bold;">Phone:</td><td style="padding: 8px; border-bottom: 1px solid #eee;">${safeUserPhone}</td></tr>
         <tr><td style="padding: 8px; border-bottom: 1px solid #eee; font-weight: bold;">Date:</td><td style="padding: 8px; border-bottom: 1px solid #eee;">${formattedDate}</td></tr>

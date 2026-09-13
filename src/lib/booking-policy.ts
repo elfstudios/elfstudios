@@ -42,7 +42,7 @@ export function calculatePrice(attendees: number, hours: number): PriceBreakdown
     throw new Error("Select between 1 and 120 hours.");
   }
 
-  const pricePerHourPaise = (attendees <= 6 ? 400 : 700) * 100;
+  const pricePerHourPaise = (400 + Math.max(0, attendees - 6) * 100) * 100;
   const subtotalPaise = pricePerHourPaise * hours;
   // Loyalty applies to the whole checkout: every ten booked hours earns one
   // free hour. This deliberately works across dates when customers use cart

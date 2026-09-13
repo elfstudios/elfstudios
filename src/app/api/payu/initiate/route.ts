@@ -13,6 +13,7 @@ import {
 } from "@/lib/booking-policy";
 import { sendOrderConfirmation } from "@/lib/mail";
 import { syncBookingToGoogleCalendar } from "@/lib/google-calendar";
+import { spendWalletCoins } from "@/lib/wallet";
 
 type BookingSession = { date: Date; slots: string[] };
 
@@ -70,8 +71,10 @@ export async function POST(req: Request) {
     const attendees = Number(body.attendees);
     const sessions = parseSessions(body);
     const bandName = String(body.bandName || "").trim().slice(0, 120);
+    const bookingName = String(body.bookingName || "").trim().slice(0, 120);
     const equipmentRequests = String(body.equipmentRequests || "").trim().slice(0, 2000) || null;
-    if (!bandName) return NextResponse.json({ error: "Band or artist name is required." }, { status: 400 });
+    const paymentMethod = body.paymentMethod === "WALLET" ? "WALLET" : "PAYU";
+    if (!bandName || !bookingName) return NextResponse.json({ error: "Booking name and artist name are required." }, { status: 400 });
 
     const totalHours = sessions.reduce((sum, session) => sum + session.slots.length, 0);
     const price = calculatePrice(attendees, totalHours);
@@ -124,15 +127,17 @@ export async function POST(req: Request) {
         update: { email: auth.user.email || undefined, name: name || undefined, phone: phone || undefined },
       });
 
-      return tx.bookingOrder.create({
+      const order = await tx.bookingOrder.create({
         data: {
           userId: auth.user.id,
           attendees,
           bandName,
+          bookingName,
           equipmentRequests,
           totalAmount,
           totalHours,
           freeHours: price.freeHours,
+          paymentMethod,
           status: "PENDING",
           paymentStatus: "PENDING",
           payuTxnId: txnid,
@@ -147,7 +152,9 @@ export async function POST(req: Request) {
               equipmentRequests,
               ticketNumber: nextTicketNumber(),
               bandName,
+              bookingName,
               totalAmount: sessionAmounts[index],
+              paymentMethod,
               status: "PENDING",
               paymentStatus: "PENDING",
               expiresAt,
@@ -156,7 +163,30 @@ export async function POST(req: Request) {
         },
         include: { bookings: { include: { user: true } }, user: true },
       });
+      if (paymentMethod !== "WALLET") return order;
+      for (const booking of order.bookings) {
+        const coins = Math.round(booking.totalAmount);
+        await spendWalletCoins(tx, auth.user.id, coins, booking.id);
+        await tx.booking.update({
+          where: { id: booking.id },
+          data: { status: "CONFIRMED", paymentStatus: "PAID", paidAt: now, expiresAt: null, paymentMethod: "WALLET", walletCoins: coins },
+        });
+      }
+      await tx.bookingOrder.update({
+        where: { id: order.id },
+        data: { status: "CONFIRMED", paymentStatus: "PAID", paidAt: now, expiresAt: null, paymentMethod: "WALLET" },
+      });
+      return tx.bookingOrder.findUniqueOrThrow({
+        where: { id: order.id }, include: { bookings: { include: { user: true } }, user: true },
+      });
     }, { isolationLevel: "Serializable" });
+
+    if (paymentMethod === "WALLET") {
+      const effects: Promise<unknown>[] = order.bookings.map(syncBookingToGoogleCalendar);
+      if (order.user.email) effects.push(sendOrderConfirmation(order, order.bookings, order.user.email));
+      await Promise.allSettled(effects);
+      return NextResponse.json({ url: `/booking/success?txnid=${encodeURIComponent(txnid)}`, params: {} });
+    }
 
     const allowDevStub = process.env.NODE_ENV !== "production" && process.env.PAYMENTS_DEV_STUB === "true";
     if (allowDevStub) {

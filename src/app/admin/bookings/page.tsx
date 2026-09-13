@@ -16,6 +16,7 @@ export default async function AdminBookingsPage() {
   return <AdminBookingsClient initialBookings={bookings.map((booking) => ({
     id: booking.id,
     bandName: booking.bandName,
+    bookingName: booking.bookingName,
     ticketNumber: booking.ticketNumber,
     attendees: booking.attendees,
     date: booking.date.toISOString(),

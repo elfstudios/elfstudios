@@ -7,11 +7,13 @@ interface Step4Props {
   onBack: () => void;
   bandName: string;
   setBandName: (val: string) => void;
+  bookingName: string;
+  setBookingName: (val: string) => void;
   equipmentRequests: string;
   setEquipmentRequests: (val: string) => void;
 }
 
-export function Step4Details({ onNext, onBack, bandName, setBandName, equipmentRequests, setEquipmentRequests }: Step4Props) {
+export function Step4Details({ onNext, onBack, bandName, setBandName, bookingName, setBookingName, equipmentRequests, setEquipmentRequests }: Step4Props) {
   const [user, setUser] = useState<User | null>(null);
   const supabase = createClient();
 
@@ -27,7 +29,7 @@ export function Step4Details({ onNext, onBack, bandName, setBandName, equipmentR
     }
   }, [user, bandName, setBandName]);
 
-  const isFormValid = bandName.trim().length > 0;
+  const isFormValid = bandName.trim().length > 0 && bookingName.trim().length > 0;
 
   return (
     <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -44,6 +46,21 @@ export function Step4Details({ onNext, onBack, bandName, setBandName, equipmentR
       </div>
 
       <div className="space-y-4">
+        <div className="space-y-2">
+          <label htmlFor="bookingName" className="text-[11px] font-mono uppercase tracking-widest text-white/50">
+            Booking Name *
+          </label>
+          <input
+            id="bookingName"
+            type="text"
+            required
+            value={bookingName}
+            onChange={(e) => setBookingName(e.target.value)}
+            placeholder="e.g. Josh Sam"
+            className="w-full h-[50px] bg-white/5 border border-white/10 rounded-xl px-4 text-white focus:outline-none focus:border-white focus:ring-1 focus:ring-white/50 transition-all font-sans text-[15px] shadow-sm backdrop-blur-sm"
+          />
+          <p className="text-[11px] text-white/40">The person responsible for this booking and payment.</p>
+        </div>
         <div className="space-y-2">
           <label htmlFor="bandName" className="text-[11px] font-mono uppercase tracking-widest text-white/50">
             Band / Artist Name *

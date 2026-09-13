@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { format } from "date-fns";
 import type { CartSession } from "./BookingFlow";
 
@@ -8,6 +8,7 @@ interface Step5Props {
   slots: string[];
   sessions: CartSession[];
   bandName: string;
+  bookingName: string;
   equipmentRequests: string;
   onNext: () => void;
   onBack: () => void;
@@ -20,19 +21,30 @@ export function Step5Summary({
   slots,
   sessions,
   bandName,
+  bookingName,
   equipmentRequests,
   onNext, 
   onBack, 
   onCancel 
 }: Step5Props) {
   const [loading, setLoading] = useState(false);
+  const [walletBalance, setWalletBalance] = useState(0);
+  const [walletLoading, setWalletLoading] = useState(true);
+  const [paymentMethod, setPaymentMethod] = useState<"PAYU" | "WALLET">("PAYU");
   const cartSessions = sessions.length ? sessions : (date && slots.length ? [{ date, slots }] : []);
   const totalHours = cartSessions.reduce((total, session) => total + session.slots.length, 0);
-  const pricePerHour = attendees <= 6 ? 400 : 700;
+  const pricePerHour = 400 + Math.max(0, attendees - 6) * 100;
   const subtotal = pricePerHour * totalHours;
   const freeHours = Math.floor(totalHours / 10);
   const discount = freeHours * pricePerHour;
   const total = subtotal - discount;
+
+  useEffect(() => {
+    fetch("/api/wallet", { cache: "no-store" })
+      .then((response) => response.ok ? response.json() : { balance: 0 })
+      .then((data) => setWalletBalance(Number(data.balance || 0)))
+      .finally(() => setWalletLoading(false));
+  }, []);
 
   const handlePayment = async () => {
     setLoading(true);
@@ -43,6 +55,8 @@ export function Step5Summary({
         body: JSON.stringify({
           attendees,
           bandName,
+          bookingName,
+          paymentMethod,
           equipmentRequests,
           sessions: cartSessions.map((session) => ({
             date: format(session.date, "yyyy-MM-dd"),
@@ -52,7 +66,8 @@ export function Step5Summary({
       });
 
       if (!res.ok) {
-        throw new Error("Failed to initiate payment");
+        const data = await res.json().catch(() => null);
+        throw new Error(data?.error || "Failed to initiate payment");
       }
 
       const { url, params } = await res.json();
@@ -81,7 +96,7 @@ export function Step5Summary({
     } catch (error) {
       console.error(error);
       setLoading(false);
-      alert("Error initiating payment. Please try again.");
+      alert(error instanceof Error ? error.message : "Error initiating payment. Please try again.");
     }
   };
 
@@ -115,6 +130,10 @@ export function Step5Summary({
 
         <div className="p-6 space-y-4">
           <div className="flex justify-between border-b border-white/10 pb-4">
+            <span className="font-mono text-[11px] text-white/40 uppercase tracking-widest">Booking Name</span>
+            <span className="font-display text-[15px] uppercase text-white font-bold text-right">{bookingName}</span>
+          </div>
+          <div className="flex justify-between border-b border-white/10 pb-4">
             <span className="font-mono text-[11px] text-white/40 uppercase tracking-widest">Band Name</span>
             <span className="font-display text-[15px] uppercase text-white font-bold text-right">{bandName}</span>
           </div>
@@ -144,6 +163,19 @@ export function Step5Summary({
               </span>
             </div>
           )}
+
+          <div className="border-b border-white/10 pb-4">
+            <span className="font-mono text-[11px] text-white/40 uppercase tracking-widest">Payment method</span>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <button type="button" onClick={() => setPaymentMethod("PAYU")} className={`rounded-xl border p-3 text-left text-xs ${paymentMethod === "PAYU" ? "border-white bg-white text-black" : "border-white/10 bg-black/20 text-white"}`}>
+                <strong className="block">UPI / Card</strong><span className="mt-1 block opacity-60">Pay ₹{total}</span>
+              </button>
+              <button type="button" disabled={walletLoading || walletBalance < total} onClick={() => setPaymentMethod("WALLET")} className={`rounded-xl border p-3 text-left text-xs disabled:cursor-not-allowed disabled:opacity-40 ${paymentMethod === "WALLET" ? "border-orange-400 bg-orange-400 text-black" : "border-white/10 bg-black/20 text-white"}`}>
+                <strong className="block">Pay with ElfCoins</strong><span className="mt-1 block opacity-60">{walletLoading ? "Checking balance…" : `${walletBalance.toLocaleString("en-IN")} coins available`}</span>
+              </button>
+            </div>
+            {!walletLoading && walletBalance < total && <p className="mt-2 text-[10px] text-orange-300">Insufficient balance — top up or pay by card/UPI.</p>}
+          </div>
 
           <div className="flex justify-between items-end pt-2">
             <span className="font-mono text-[11px] text-white/40 uppercase tracking-widest">Total (Advance)</span>
@@ -177,7 +209,7 @@ export function Step5Summary({
           disabled={loading}
           className="h-[50px] px-8 bg-white text-black hover:bg-white/90 font-bold tracking-widest uppercase transition-all rounded-xl text-[11px] shadow-sm transform hover:-translate-y-0.5 disabled:opacity-50 disabled:hover:translate-y-0"
         >
-          {loading ? "Processing..." : `Pay ₹${total}`}
+          {loading ? "Processing..." : paymentMethod === "WALLET" ? `Pay with ${total} coins` : `Pay ₹${total}`}
         </button>
       </div>
     </div>

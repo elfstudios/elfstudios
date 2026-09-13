@@ -55,6 +55,8 @@ model User {
   sessions      Session[]
   bookings      Booking[]
   bookingOrders BookingOrder[]
+  wallet        Wallet?
+  walletTopUps  WalletTopUp[]
 }
 
 model VerificationToken {
@@ -80,8 +82,11 @@ model Booking {
   equipmentRequests String?
   ticketNumber     String?  @unique
   bandName         String?
+  bookingName      String?
   
   totalAmount      Float
+  paymentMethod    String   @default("PAYU") // PAYU or WALLET
+  walletCoins      Int      @default(0)
   
   status           String   @default("PENDING") // PENDING, CONFIRMED, CANCELLED
   paymentStatus    String   @default("UNPAID") // UNPAID, PENDING, PAID, FAILED, EXPIRED
@@ -96,6 +101,7 @@ model Booking {
   googleCalendarSyncedAt DateTime?
 
   changeRequests   BookingChangeRequest[]
+  walletTransactions WalletTransaction[]
   
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
@@ -115,10 +121,12 @@ model BookingOrder {
   user              User     @relation(fields: [userId], references: [id])
   attendees         Int
   bandName          String?
+  bookingName       String?
   equipmentRequests String?
   totalAmount       Float
   totalHours        Int
   freeHours         Int      @default(0)
+  paymentMethod     String   @default("PAYU")
   status            String   @default("PENDING") // PENDING, CONFIRMED, CANCELLED
   paymentStatus     String   @default("UNPAID") // UNPAID, PENDING, PAID, FAILED, EXPIRED
   payuTxnId         String?  @unique
@@ -133,6 +141,66 @@ model BookingOrder {
 
   @@index([userId, createdAt])
   @@index([expiresAt])
+}
+
+model Wallet {
+  id           String              @id @default(cuid())
+  userId       String              @unique
+  user         User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lots         WalletLot[]
+  transactions WalletTransaction[]
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+}
+
+// Each top-up remains a separate expiry bucket. Wallet spending is FIFO by expiry.
+model WalletLot {
+  id             String              @id @default(cuid())
+  walletId       String
+  wallet         Wallet              @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  topUpId        String?             @unique
+  originalCoins  Int
+  remainingCoins Int
+  expiresAt      DateTime
+  createdAt      DateTime            @default(now())
+  transactions   WalletTransaction[]
+
+  @@index([walletId, expiresAt])
+}
+
+model WalletTransaction {
+  id          String     @id @default(cuid())
+  walletId    String
+  wallet      Wallet     @relation(fields: [walletId], references: [id], onDelete: Cascade)
+  lotId       String?
+  lot         WalletLot? @relation(fields: [lotId], references: [id], onDelete: SetNull)
+  bookingId   String?
+  booking     Booking?   @relation(fields: [bookingId], references: [id], onDelete: SetNull)
+  type        String     // TOPUP, DEBIT, REFUND, ADJUSTMENT
+  coins       Int        // Positive credits, negative debits
+  description String?
+  createdAt   DateTime   @default(now())
+
+  @@index([walletId, createdAt])
+  @@index([bookingId])
+}
+
+model WalletTopUp {
+  id             String   @id @default(cuid())
+  userId         String
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount          Float
+  coins           Int
+  validityDays    Int
+  expiresAt       DateTime
+  status          String   @default("PENDING")
+  payuTxnId       String?  @unique
+  payuPaymentId   String?
+  paidAt          DateTime?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([userId, createdAt])
 }
 
 model BookingChangeRequest {

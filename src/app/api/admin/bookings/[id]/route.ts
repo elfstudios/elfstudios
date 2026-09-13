@@ -1,9 +1,10 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireApiAdmin } from "@/lib/auth";
-import { normalizeBookingDate, sessionStart, validateSlots } from "@/lib/booking-policy";
+import { calculatePrice, formatRupees, normalizeBookingDate, sessionStart, validateSlots } from "@/lib/booking-policy";
 import { sendBookingChangeNotification } from "@/lib/mail";
 import { syncBookingToGoogleCalendar } from "@/lib/google-calendar";
+import { refundBookingWalletCoins, spendWalletCoins } from "@/lib/wallet";
 
 export async function PATCH(req: Request, { params: paramsPromise }: { params: Promise<{ id: string }> }) {
   const params = await paramsPromise;
@@ -22,8 +23,9 @@ export async function PATCH(req: Request, { params: paramsPromise }: { params: P
       const updated = await prisma.$transaction(async (tx) => {
         const changed = await tx.booking.update({
           where: { id: booking.id },
-          data: { status: "CANCELLED", cancelledAt: new Date(), cancelledBy: auth.user.email || auth.user.id, cancellationReason: reason },
+          data: { status: "CANCELLED", cancelledAt: new Date(), cancelledBy: auth.user.email || auth.user.id, cancellationReason: reason, walletCoins: booking.paymentMethod === "WALLET" ? 0 : undefined },
         });
+        if (booking.paymentMethod === "WALLET" && booking.walletCoins > 0) await refundBookingWalletCoins(tx, booking.id, booking.walletCoins);
         await tx.bookingChangeRequest.create({
           data: {
             bookingId: booking.id,
@@ -41,6 +43,36 @@ export async function PATCH(req: Request, { params: paramsPromise }: { params: P
       });
       if (booking.user.email) await sendBookingChangeNotification({ ...booking, ...updated }, booking.user.email, "CANCELLED").catch(console.error);
       await syncBookingToGoogleCalendar({ ...booking, ...updated }).catch((error) => console.error("Google Calendar cancellation sync failed:", error));
+      return NextResponse.json({ booking: updated });
+    }
+
+    if (action === "EDIT") {
+      if (booking.status !== "CONFIRMED") return NextResponse.json({ error: "Only confirmed bookings can be edited." }, { status: 409 });
+      const attendees = Number(body.attendees ?? booking.attendees);
+      const requestedDate = body.requestedDate ? normalizeBookingDate(body.requestedDate) : booking.date;
+      const requestedSlots = body.requestedSlots ? validateSlots(body.requestedSlots) : booking.slots;
+      if (sessionStart(requestedDate, requestedSlots) <= new Date()) throw new Error("The session time must be in the future.");
+      const bandName = String(body.bandName ?? booking.bandName ?? "").trim().slice(0, 120);
+      const bookingName = String(body.bookingName ?? booking.bookingName ?? "").trim().slice(0, 120);
+      if (!bandName || !bookingName) throw new Error("Booking name and artist name are required.");
+      const totalAmount = formatRupees(calculatePrice(attendees, requestedSlots.length).totalPaise);
+      const walletCoins = booking.paymentMethod === "WALLET" ? Math.round(totalAmount) : booking.walletCoins;
+      const updated = await prisma.$transaction(async (tx) => {
+        const conflict = await tx.booking.findFirst({ where: { id: { not: booking.id }, date: requestedDate, slots: { hasSome: requestedSlots }, OR: [{ status: "CONFIRMED" }, { status: "PENDING", expiresAt: { gt: new Date() } }] }, select: { id: true } });
+        if (conflict) throw new Error("One or more selected slots are unavailable.");
+        const blocked = await tx.calendarBlock.findFirst({ where: { date: requestedDate, slots: { hasSome: requestedSlots } }, select: { id: true } });
+        if (blocked) throw new Error("One or more selected slots are manually blocked.");
+        if (booking.paymentMethod === "WALLET") {
+          const difference = walletCoins - booking.walletCoins;
+          if (difference > 0) await spendWalletCoins(tx, booking.userId, difference, booking.id);
+          if (difference < 0) await refundBookingWalletCoins(tx, booking.id, -difference);
+          if (booking.orderId && difference) await tx.bookingOrder.update({ where: { id: booking.orderId }, data: { totalAmount: { increment: difference } } });
+        }
+        const changed = await tx.booking.update({ where: { id: booking.id }, data: { attendees, date: requestedDate, slots: requestedSlots, bandName, bookingName, equipmentRequests: String(body.equipmentRequests ?? booking.equipmentRequests ?? "").trim().slice(0, 2000) || null, totalAmount, walletCoins } });
+        await tx.bookingChangeRequest.create({ data: { bookingId: booking.id, requestedById: auth.user.id, type: "EDIT", status: "APPROVED", reason, requestedDate, requestedSlots, resolvedBy: auth.user.email || auth.user.id, resolvedAt: new Date(), adminNote: "Booking edited directly by an administrator." } });
+        return changed;
+      }, { isolationLevel: "Serializable" });
+      await syncBookingToGoogleCalendar({ ...booking, ...updated }).catch((error) => console.error("Google Calendar edit sync failed:", error));
       return NextResponse.json({ booking: updated });
     }
 
@@ -97,4 +129,15 @@ export async function PATCH(req: Request, { params: paramsPromise }: { params: P
     const message = error instanceof Error ? error.message : "Unable to update booking.";
     return NextResponse.json({ error: message }, { status: 400 });
   }
+}
+
+export async function DELETE(_req: Request, { params: paramsPromise }: { params: Promise<{ id: string }> }) {
+  const params = await paramsPromise;
+  const auth = await requireApiAdmin();
+  if (!auth.user) return auth.response;
+  const booking = await prisma.booking.findUnique({ where: { id: params.id } });
+  if (!booking) return NextResponse.json({ error: "Booking not found." }, { status: 404 });
+  if (booking.status !== "CANCELLED") return NextResponse.json({ error: "Only cancelled bookings can be permanently deleted." }, { status: 409 });
+  await prisma.booking.delete({ where: { id: booking.id } });
+  return NextResponse.json({ deleted: true });
 }
