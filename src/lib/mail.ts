@@ -71,6 +71,14 @@ export async function sendBookingConfirmation(booking: any, userEmail: string) {
 
         <table style="width: 100%; border-collapse: collapse; margin-bottom: 30px;">
           <tr>
+            <td style="padding: 12px 0; border-bottom: 1px solid #333; color: #888;">Booking Name</td>
+            <td style="padding: 12px 0; border-bottom: 1px solid #333; font-weight: bold; text-align: right;">${safeBookingName}</td>
+          </tr>
+          <tr>
+            <td style="padding: 12px 0; border-bottom: 1px solid #333; color: #888;">Artist / Band</td>
+            <td style="padding: 12px 0; border-bottom: 1px solid #333; font-weight: bold; text-align: right;">${safeBandName}</td>
+          </tr>
+          <tr>
             <td style="padding: 12px 0; border-bottom: 1px solid #333; color: #888; width: 40%;">Date</td>
             <td style="padding: 12px 0; border-bottom: 1px solid #333; font-weight: bold; text-align: right;">${formattedDate}</td>
           </tr>
