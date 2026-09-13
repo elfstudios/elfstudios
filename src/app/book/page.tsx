@@ -80,38 +80,28 @@ export default function BookPage() {
       </div>
 
       {/* Top Navigation */}
-      <div className="relative z-10 w-full p-6 flex justify-between items-center max-w-7xl mx-auto border-b border-white/5 shrink-0 bg-[#1E1E1E]/80 backdrop-blur-md">
-        <a href="https://www.elfstudios.in/elf-jampad" className="text-gray-400 hover:text-white font-mono text-[10px] md:text-xs tracking-widest uppercase transition-colors flex items-center gap-2 group">
+      <div className="relative z-10 mx-auto flex w-full max-w-7xl flex-col gap-3 border-b border-white/5 bg-[#1E1E1E]/80 p-4 backdrop-blur-md sm:flex-row sm:items-center sm:justify-between sm:p-6 shrink-0">
+        <a href="https://www.elfstudios.in/elf-jampad" className="self-start text-gray-400 hover:text-white font-mono text-[10px] md:text-xs tracking-widest uppercase transition-colors flex items-center gap-2 group">
           <span className="group-hover:-translate-x-1 transition-transform">&lt;</span> Back
         </a>
-        <div className="flex items-center gap-6">
-          <a
-            href="/my-bookings"
-            className="min-h-11 flex items-center text-[10px] font-mono text-white/70 hover:text-white uppercase tracking-widest transition-colors"
-          >
-            My Bookings
-          </a>
-          <a href="/wallet" className="min-h-11 flex items-center rounded-lg border border-orange-400/40 bg-orange-400/10 px-3 text-[10px] font-mono font-bold text-orange-200 hover:bg-orange-400/20 uppercase tracking-widest transition-colors">ElfCoins Wallet</a>
-          <div className="flex items-center gap-4">
-            <span className="font-mono text-[10px] text-gray-500 uppercase tracking-widest hidden sm:inline">
+        <div className="flex min-w-0 items-center justify-between gap-3 sm:justify-end sm:gap-6">
+          <nav className="flex min-w-0 items-center gap-3 whitespace-nowrap sm:gap-6" aria-label="Booking navigation">
+            <a href="/my-bookings" className="min-h-11 flex items-center text-[10px] font-mono text-white/70 hover:text-white uppercase tracking-widest transition-colors">My Bookings</a>
+            <a href="/wallet" className="min-h-11 flex items-center text-[10px] font-mono text-white/70 hover:text-white uppercase tracking-widest transition-colors">My Wallet</a>
+            <span className="hidden max-w-32 truncate font-mono text-[10px] uppercase tracking-widest text-gray-500 lg:inline">
               {user.email?.split("@")[0]}
             </span>
-            <button 
-              onClick={handleLogout}
-              className="min-h-11 text-[10px] font-mono text-gray-400 hover:text-red-500 uppercase tracking-widest transition-colors"
-            >
+            <button onClick={handleLogout} className="min-h-11 text-[10px] font-mono text-gray-400 hover:text-red-500 uppercase tracking-widest transition-colors">
               Logout
             </button>
-          </div>
-          
-          <div className="h-4 w-px bg-white/10 hidden sm:block"></div>
+          </nav>
 
-          <Image 
+          <Image
             src="/assets/ELF JAMPAD black.png" 
             alt="Elf Jampad Logo" 
             width={80} 
             height={26} 
-            className="object-contain invert opacity-70"
+            className="h-auto w-14 shrink-0 object-contain invert opacity-70 sm:w-20"
           />
         </div>
       </div>
