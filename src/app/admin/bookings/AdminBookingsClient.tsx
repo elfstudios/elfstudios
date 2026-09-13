@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CalendarDays, Clock, Mail, Pencil, Phone, RotateCcw, Search, Trash2, Users, XCircle } from "lucide-react";
+import { CalendarDays, Clock, Download, Mail, Pencil, Phone, RotateCcw, Search, Trash2, Users, XCircle } from "lucide-react";
 
 type Booking = {
   id: string; bandName: string | null; bookingName: string | null; ticketNumber: string | null; attendees: number;
@@ -21,6 +21,10 @@ export function AdminBookingsClient({ initialBookings }: { initialBookings: Book
   const router = useRouter();
   const [query, setQuery] = useState("");
   const [status, setStatus] = useState("ALL");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [minAmount, setMinAmount] = useState("");
+  const [maxAmount, setMaxAmount] = useState("");
   const [active, setActive] = useState<{ booking: Booking; action: "CANCEL" | "RESCHEDULE" | "EDIT" } | null>(null);
   const [date, setDate] = useState("");
   const [slots, setSlots] = useState<string[]>([]);
@@ -34,9 +38,28 @@ export function AdminBookingsClient({ initialBookings }: { initialBookings: Book
   const [equipmentRequests, setEquipmentRequests] = useState("");
 
   const visible = useMemo(() => initialBookings.filter((booking) => {
-    const text = `${booking.bandName} ${booking.ticketNumber} ${booking.user.name} ${booking.user.email} ${booking.user.phone}`.toLowerCase();
-    return (status === "ALL" || booking.status === status) && text.includes(query.toLowerCase());
-  }), [initialBookings, query, status]);
+    const text = `${booking.bookingName} ${booking.bandName} ${booking.ticketNumber} ${booking.user.name} ${booking.user.email} ${booking.user.phone}`.toLowerCase();
+    const amountMatches = (!minAmount || booking.totalAmount >= Number(minAmount)) && (!maxAmount || booking.totalAmount <= Number(maxAmount));
+    const bookingDate = booking.date.slice(0, 10);
+    const dateMatches = (!dateFrom || bookingDate >= dateFrom) && (!dateTo || bookingDate <= dateTo);
+    return (status === "ALL" || booking.status === status) && text.includes(query.toLowerCase()) && amountMatches && dateMatches;
+  }), [initialBookings, query, status, dateFrom, dateTo, minAmount, maxAmount]);
+
+  function downloadExport() {
+    const params = new URLSearchParams();
+    if (query.trim()) params.set("q", query.trim());
+    if (status !== "ALL") params.set("status", status);
+    if (dateFrom) params.set("from", dateFrom);
+    if (dateTo) params.set("to", dateTo);
+    if (minAmount) params.set("minAmount", minAmount);
+    if (maxAmount) params.set("maxAmount", maxAmount);
+    const download = document.createElement("a");
+    download.href = `/api/admin/export/bookings?${params.toString()}`;
+    download.download = "";
+    document.body.appendChild(download);
+    download.click();
+    download.remove();
+  }
 
   function open(booking: Booking, action: "CANCEL" | "RESCHEDULE" | "EDIT") {
     setActive({ booking, action }); setDate(action === "EDIT" ? booking.date.slice(0, 10) : ""); setSlots(action === "EDIT" ? booking.slots : []); setBooked([]); setReason(""); setError(""); setBookingName(booking.bookingName || ""); setBandName(booking.bandName || ""); setAttendees(booking.attendees); setEquipmentRequests(booking.equipmentRequests || "");
@@ -72,9 +95,18 @@ export function AdminBookingsClient({ initialBookings }: { initialBookings: Book
   return (
     <div className="space-y-6">
       <div><h1 className="text-3xl font-black uppercase tracking-tighter">Manage Bookings</h1><p className="mt-2 text-gray-500">Cancel or reschedule any session. Customers are notified by email.</p></div>
-      <div className="flex flex-col gap-3 rounded-2xl border bg-white p-4 sm:flex-row">
-        <label className="relative flex-1"><Search className="absolute left-3 top-3 h-5 w-5 text-gray-400"/><span className="sr-only">Search bookings</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search band, ticket, email or phone" className="h-11 w-full rounded-xl border pl-10 pr-3 text-sm"/></label>
+      <div className="rounded-2xl border bg-white p-4">
+        <div className="flex flex-col gap-3 lg:flex-row">
+        <label className="relative flex-1"><Search className="absolute left-3 top-3 h-5 w-5 text-gray-400"/><span className="sr-only">Search bookings</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search booking name, artist, ticket, email or phone" className="h-11 w-full rounded-xl border pl-10 pr-3 text-sm"/></label>
         <select value={status} onChange={(event) => setStatus(event.target.value)} className="h-11 rounded-xl border px-3 text-sm"><option value="ALL">All statuses</option><option>CONFIRMED</option><option>PENDING</option><option>CANCELLED</option></select>
+          <button onClick={downloadExport} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-black px-4 text-sm font-bold text-white hover:bg-black/80"><Download className="h-4 w-4"/>Download Excel</button>
+        </div>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <label className="text-xs font-semibold text-gray-500">Booking date from<input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} className="mt-1 h-10 w-full rounded-lg border px-3 text-sm text-black"/></label>
+          <label className="text-xs font-semibold text-gray-500">Booking date to<input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} className="mt-1 h-10 w-full rounded-lg border px-3 text-sm text-black"/></label>
+          <label className="text-xs font-semibold text-gray-500">Minimum amount<input type="number" min="0" value={minAmount} onChange={(event) => setMinAmount(event.target.value)} placeholder="₹0" className="mt-1 h-10 w-full rounded-lg border px-3 text-sm text-black"/></label>
+          <label className="text-xs font-semibold text-gray-500">Maximum amount<input type="number" min="0" value={maxAmount} onChange={(event) => setMaxAmount(event.target.value)} placeholder="Any amount" className="mt-1 h-10 w-full rounded-lg border px-3 text-sm text-black"/></label>
+        </div>
       </div>
       <div className="grid gap-4 xl:grid-cols-2">
         {visible.map((booking) => (

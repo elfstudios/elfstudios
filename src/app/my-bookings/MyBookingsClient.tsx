@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
-import { CalendarDays, Clock, Music2, RotateCcw } from "lucide-react";
+import { CalendarDays, Clock, Coins, Music2, RotateCcw } from "lucide-react";
 
 type ChangeRequest = {
   id: string;
@@ -132,6 +132,7 @@ export function MyBookingsClient({ initialBookings, email, policy }: {
           </div>
           <nav className="flex items-center gap-2 text-xs">
             <Link href="/book" className="rounded-lg border border-white/15 px-3 py-2.5 hover:bg-white/10">Book session</Link>
+            <Link href="/wallet" className="inline-flex items-center gap-1 rounded-lg border border-orange-400/50 bg-orange-400/10 px-3 py-2.5 font-bold text-orange-200 hover:bg-orange-400/20"><Coins className="h-3.5 w-3.5"/>Wallet</Link>
             <button onClick={logout} className="rounded-lg px-3 py-2.5 text-white/60 hover:text-white">Logout</button>
           </nav>
         </div>

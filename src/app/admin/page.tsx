@@ -87,7 +87,7 @@ export default async function AdminDashboard() {
               <thead className="bg-gray-50 text-gray-500 font-mono text-xs uppercase">
                 <tr>
                   <th className="px-6 py-4 font-normal">Date & Time</th>
-                  <th className="px-6 py-4 font-normal">Band / User</th>
+                  <th className="px-6 py-4 font-normal">Artist / Booking name</th>
                   <th className="px-6 py-4 font-normal">Attendees</th>
                   <th className="px-6 py-4 font-normal">Amount</th>
                 </tr>
@@ -110,8 +110,8 @@ export default async function AdminDashboard() {
                         </div>
                       </td>
                       <td className="px-6 py-4">
-                        <div className="font-bold text-black">{booking.bandName || "Unknown Band"}</div>
-                        <div className="text-gray-500 text-xs">{booking.user.name || booking.user.email}</div>
+                        <div className="font-bold text-black">{booking.bandName || "Unknown artist"}</div>
+                        <div className="text-gray-500 text-xs">Booked by {booking.bookingName || booking.user.name || booking.user.email}</div>
                         <div className="text-gray-400 text-xs">{booking.user.phone}</div>
                       </td>
                       <td className="px-6 py-4">

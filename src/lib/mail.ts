@@ -165,6 +165,7 @@ export async function sendOrderConfirmation(order: any, bookings: any[], userEma
     </tr>`;
   }).join("");
   const safeBand = escapeHtml(order.bandName || "Jam Session");
+  const safeBookingName = escapeHtml(order.bookingName || order.user?.name || "Musician");
   const safeName = escapeHtml(order.user?.name || "Musician");
   const total = Number(order.totalAmount).toLocaleString("en-IN");
   const loyalty = order.freeHours > 0
@@ -175,6 +176,7 @@ export async function sendOrderConfirmation(order: any, bookings: any[], userEma
       <div style="padding:28px;text-align:center;background:#000;border-bottom:2px solid #ff6600"><h1 style="margin:0;color:#ff6600;letter-spacing:2px">ELF STUDIOS</h1></div>
       <div style="padding:30px"><h2 style="color:#86efac;margin-top:0">Your sessions are confirmed!</h2>
         <p>Hey ${safeName}, we have received payment for <strong>${safeBand}</strong>. All ${bookings.length} sessions below are secured.</p>
+        <p><strong>Booking name:</strong> ${safeBookingName}<br/><strong>Artist / band:</strong> ${safeBand}</p>
         <table style="width:100%;border-collapse:collapse;margin-top:20px"><thead><tr><th style="text-align:left;color:#aaa;font-size:12px">DATE & TIME</th><th style="text-align:right;color:#aaa;font-size:12px">TICKET</th></tr></thead><tbody>${sessions}</tbody></table>
         ${loyalty}
         <p style="font-size:22px;font-weight:bold;text-align:right;margin-top:26px">Paid: <span style="color:#86efac">₹${total}</span></p>
@@ -182,7 +184,9 @@ export async function sendOrderConfirmation(order: any, bookings: any[], userEma
     </div>`;
   const adminHtml = `
     <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto"><h2 style="color:#ff6600">New multi-session booking: ${safeBand}</h2>
-      <p><strong>Customer:</strong> ${safeName} (${escapeHtml(userEmail)})</p>
+      <p><strong>Booking name:</strong> ${safeBookingName}</p>
+      <p><strong>Artist / band:</strong> ${safeBand}</p>
+      <p><strong>Customer account:</strong> ${safeName} (${escapeHtml(userEmail)})</p>
       <p><strong>Paid:</strong> ₹${total}${order.freeHours ? ` · ${order.freeHours} loyalty free hour${order.freeHours === 1 ? "" : "s"}` : ""}</p>
       <table style="width:100%;border-collapse:collapse"><tbody>${sessions.replaceAll("#333", "#eee")}</tbody></table>
     </div>`;
