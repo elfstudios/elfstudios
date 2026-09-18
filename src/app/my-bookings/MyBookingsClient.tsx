@@ -187,7 +187,7 @@ export function MyBookingsClient({ initialBookings, email, policy }: {
         <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/75 p-0 backdrop-blur-sm sm:items-center sm:p-4" role="dialog" aria-modal="true" aria-labelledby="request-title">
           <div className="max-h-[92vh] w-full max-w-xl overflow-y-auto rounded-t-3xl border border-white/10 bg-[#1b1b1b] p-5 shadow-2xl sm:rounded-3xl sm:p-7">
             <div className="flex items-start justify-between gap-4">
-              <div><p className="text-xs uppercase tracking-widest text-orange-400">{selectedBooking.ticketNumber}</p><h2 id="request-title" className="mt-1 text-2xl font-black">Reschedule booking</h2></div>
+              <div><p className="text-xs uppercase tracking-widest text-orange-400">{selectedBooking.ticketNumber}</p><h2 id="request-title" className="mt-1 text-2xl font-black">{active.type === "CANCEL" ? "Cancel booking" : "Reschedule booking"}</h2></div>
               <button onClick={() => setActive(null)} aria-label="Close" className="h-11 w-11 rounded-full bg-white/10 text-2xl">×</button>
             </div>
 
