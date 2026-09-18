@@ -24,6 +24,7 @@ export default async function AdminBookingsPage() {
     totalAmount: booking.totalAmount,
     status: booking.status,
     paymentStatus: booking.paymentStatus,
+    cancellationCreditCoins: booking.cancellationCreditCoins,
     equipmentRequests: booking.equipmentRequests,
     order: booking.order,
     user: { name: booking.user.name, email: booking.user.email, phone: booking.user.phone },

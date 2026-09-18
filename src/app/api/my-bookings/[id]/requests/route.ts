@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireApiUser } from "@/lib/auth";
 import {
+  canRequestCancellation,
   canRequestReschedule,
   normalizeBookingDate,
   validateRescheduleTarget,
@@ -9,6 +10,7 @@ import {
 } from "@/lib/booking-policy";
 import { sendBookingChangeNotification } from "@/lib/mail";
 import { syncBookingToGoogleCalendar } from "@/lib/google-calendar";
+import { creditCancelledBookingToWallet } from "@/lib/wallet";
 
 export async function POST(req: Request, { params: paramsPromise }: { params: Promise<{ id: string }> }) {
   const params = await paramsPromise;
@@ -18,8 +20,8 @@ export async function POST(req: Request, { params: paramsPromise }: { params: Pr
   try {
     const body = await req.json();
     const type = String(body.type || "").toUpperCase();
-    if (type !== "RESCHEDULE") {
-      return NextResponse.json({ error: "Customers may reschedule bookings but cannot cancel them." }, { status: 400 });
+    if (type !== "RESCHEDULE" && type !== "CANCEL") {
+      return NextResponse.json({ error: "Invalid booking request." }, { status: 400 });
     }
 
     const booking = await prisma.booking.findFirst({
@@ -31,9 +33,45 @@ export async function POST(req: Request, { params: paramsPromise }: { params: Pr
       return NextResponse.json({ error: "Only confirmed bookings can be changed." }, { status: 409 });
     }
     const reason = String(body.reason || "").trim().slice(0, 1000) || null;
-    const policy = canRequestReschedule(booking.date, booking.slots);
+    const policy = type === "CANCEL"
+      ? canRequestCancellation(booking.date, booking.slots)
+      : canRequestReschedule(booking.date, booking.slots);
     if (!policy.allowed) {
-      return NextResponse.json({ error: "Rescheduling closes 48 hours before the session." }, { status: 400 });
+      return NextResponse.json({ error: `${type === "CANCEL" ? "Cancellation" : "Rescheduling"} closes 48 hours before the session.` }, { status: 400 });
+    }
+
+    if (type === "CANCEL") {
+      const credit = Math.round(booking.totalAmount);
+      const updated = await prisma.$transaction(async (tx) => {
+        await creditCancelledBookingToWallet(tx, booking.userId, booking.id, credit);
+        const changed = await tx.booking.update({
+          where: { id: booking.id },
+          data: {
+            status: "CANCELLED",
+            cancelledAt: new Date(),
+            cancelledBy: auth.user.id,
+            cancellationReason: reason,
+            cancellationCreditCoins: credit,
+          },
+        });
+        await tx.bookingChangeRequest.create({
+          data: {
+            bookingId: booking.id,
+            requestedById: auth.user.id,
+            type,
+            status: "APPROVED",
+            reason,
+            requestedSlots: [],
+            resolvedBy: auth.user.id,
+            resolvedAt: new Date(),
+            adminNote: "Cancelled by the customer. The paid value was moved to ElfCoins automatically.",
+          },
+        });
+        return changed;
+      }, { isolationLevel: "Serializable" });
+      if (booking.user.email) await sendBookingChangeNotification({ ...booking, ...updated }, booking.user.email, "CANCELLED", credit).catch(console.error);
+      await syncBookingToGoogleCalendar({ ...booking, ...updated }).catch((error) => console.error("Google Calendar cancellation sync failed:", error));
+      return NextResponse.json({ booking: updated, credit }, { status: 200 });
     }
     const requestedDate = normalizeBookingDate(body.requestedDate);
     const requestedSlots = validateSlots(body.requestedSlots);

@@ -19,12 +19,15 @@ export async function walletSummary(userId: string) {
     data: { remainingCoins: 0 },
   });
   const [lots, transactions] = await Promise.all([
-    prisma.walletLot.findMany({ where: { walletId: wallet.id, expiresAt: { gt: now }, remainingCoins: { gt: 0 } }, orderBy: { expiresAt: "asc" } }),
+    prisma.walletLot.findMany({
+      where: { walletId: wallet.id, OR: [{ expiresAt: null }, { expiresAt: { gt: now } }], remainingCoins: { gt: 0 } },
+      orderBy: [{ expiresAt: { sort: "asc", nulls: "last" } }, { createdAt: "asc" }],
+    }),
     prisma.walletTransaction.findMany({ where: { walletId: wallet.id }, orderBy: { createdAt: "desc" }, take: 30 }),
   ]);
   return {
     balance: lots.reduce((sum, lot) => sum + lot.remainingCoins, 0),
-    expiresAt: lots[0]?.expiresAt || null,
+    expiresAt: lots.find((lot) => lot.expiresAt)?.expiresAt || null,
     lots,
     transactions,
   };
@@ -44,8 +47,8 @@ export async function spendWalletCoins(tx: any, userId: string, coins: number, b
   if (!Number.isInteger(coins) || coins < 0) throw new Error("Wallet amount is invalid.");
   const wallet = await activeWallet(tx, userId);
   const lots = await tx.walletLot.findMany({
-    where: { walletId: wallet.id, expiresAt: { gt: new Date() }, remainingCoins: { gt: 0 } },
-    orderBy: [{ expiresAt: "asc" }, { createdAt: "asc" }],
+    where: { walletId: wallet.id, OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }], remainingCoins: { gt: 0 } },
+    orderBy: [{ expiresAt: { sort: "asc", nulls: "last" } }, { createdAt: "asc" }],
   });
   if (lots.reduce((sum: number, lot: { remainingCoins: number }) => sum + lot.remainingCoins, 0) < coins) {
     throw new Error("Insufficient ElfCoins. Please top up or pay by card/UPI.");
@@ -60,6 +63,30 @@ export async function spendWalletCoins(tx: any, userId: string, coins: number, b
     });
     remaining -= used;
   }
+}
+
+export async function creditCancelledBookingToWallet(tx: any, userId: string, bookingId: string, coins: number) {
+  if (!Number.isInteger(coins) || coins <= 0) throw new Error("Cancellation credit amount is invalid.");
+  const existing = await tx.walletTransaction.findFirst({
+    where: { bookingId, type: "CANCELLATION_CREDIT" },
+    select: { id: true },
+  });
+  if (existing) throw new Error("This booking has already been credited to the wallet.");
+  const wallet = await activeWallet(tx, userId);
+  const lot = await tx.walletLot.create({
+    data: { walletId: wallet.id, originalCoins: coins, remainingCoins: coins, expiresAt: null },
+  });
+  await tx.walletTransaction.create({
+    data: {
+      walletId: wallet.id,
+      lotId: lot.id,
+      bookingId,
+      type: "CANCELLATION_CREDIT",
+      coins,
+      description: "Booking cancellation credit — no expiry",
+    },
+  });
+  return lot;
 }
 
 export async function refundBookingWalletCoins(tx: any, bookingId: string, coins?: number) {

@@ -137,7 +137,7 @@ export async function GET(request: Request) {
   ]);
   styleHeader(summary.getRow(5));
   summary.getCell("B2").numFmt = "dd mmm yyyy, h:mm AM/PM";
-  summary.getCell("B9").numFmt = '₹#,##0';
+  summary.getCell("B10").numFmt = '₹#,##0';
   for (let rowNumber = 5; rowNumber <= 9; rowNumber += 1) {
     for (let columnNumber = 1; columnNumber <= 2; columnNumber += 1) {
       summary.getRow(rowNumber).getCell(columnNumber).border = {

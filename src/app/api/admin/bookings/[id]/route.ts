@@ -4,7 +4,7 @@ import { requireApiAdmin } from "@/lib/auth";
 import { calculatePrice, formatRupees, normalizeBookingDate, sessionStart, validateSlots } from "@/lib/booking-policy";
 import { sendBookingChangeNotification } from "@/lib/mail";
 import { syncBookingToGoogleCalendar } from "@/lib/google-calendar";
-import { refundBookingWalletCoins, spendWalletCoins } from "@/lib/wallet";
+import { creditCancelledBookingToWallet, refundBookingWalletCoins, spendWalletCoins } from "@/lib/wallet";
 
 export async function PATCH(req: Request, { params: paramsPromise }: { params: Promise<{ id: string }> }) {
   const params = await paramsPromise;
@@ -20,12 +20,13 @@ export async function PATCH(req: Request, { params: paramsPromise }: { params: P
 
     if (action === "CANCEL") {
       if (booking.status === "CANCELLED") return NextResponse.json({ error: "Booking is already cancelled." }, { status: 409 });
+      const credit = Math.round(booking.totalAmount);
       const updated = await prisma.$transaction(async (tx) => {
+        await creditCancelledBookingToWallet(tx, booking.userId, booking.id, credit);
         const changed = await tx.booking.update({
           where: { id: booking.id },
-          data: { status: "CANCELLED", cancelledAt: new Date(), cancelledBy: auth.user.email || auth.user.id, cancellationReason: reason, walletCoins: booking.paymentMethod === "WALLET" ? 0 : undefined },
+          data: { status: "CANCELLED", cancelledAt: new Date(), cancelledBy: auth.user.email || auth.user.id, cancellationReason: reason, cancellationCreditCoins: credit },
         });
-        if (booking.paymentMethod === "WALLET" && booking.walletCoins > 0) await refundBookingWalletCoins(tx, booking.id, booking.walletCoins);
         await tx.bookingChangeRequest.create({
           data: {
             bookingId: booking.id,
@@ -36,12 +37,12 @@ export async function PATCH(req: Request, { params: paramsPromise }: { params: P
             requestedSlots: [],
             resolvedBy: auth.user.email || auth.user.id,
             resolvedAt: new Date(),
-            adminNote: "Cancelled directly by an administrator.",
+            adminNote: "Cancelled directly by an administrator. The paid value was moved to ElfCoins.",
           },
         });
         return changed;
       });
-      if (booking.user.email) await sendBookingChangeNotification({ ...booking, ...updated }, booking.user.email, "CANCELLED").catch(console.error);
+      if (booking.user.email) await sendBookingChangeNotification({ ...booking, ...updated }, booking.user.email, "CANCELLED", credit).catch(console.error);
       await syncBookingToGoogleCalendar({ ...booking, ...updated }).catch((error) => console.error("Google Calendar cancellation sync failed:", error));
       return NextResponse.json({ booking: updated });
     }

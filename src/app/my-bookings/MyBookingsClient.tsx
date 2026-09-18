@@ -4,7 +4,7 @@ import Link from "next/link";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/utils/supabase/client";
-import { CalendarDays, Clock, Coins, Music2, RotateCcw } from "lucide-react";
+import { CalendarDays, Clock, Coins, Music2, RotateCcw, XCircle } from "lucide-react";
 
 type ChangeRequest = {
   id: string;
@@ -29,6 +29,7 @@ type Booking = {
   totalAmount: number;
   status: string;
   paymentStatus: string;
+  cancellationCreditCoins: number;
   createdAt: string;
   changeRequests: ChangeRequest[];
 };
@@ -57,7 +58,7 @@ export function MyBookingsClient({ initialBookings, email, policy }: {
 }) {
   const router = useRouter();
   const supabase = createClient();
-  const [active, setActive] = useState<{ id: string; type: "RESCHEDULE" } | null>(null);
+  const [active, setActive] = useState<{ id: string; type: "RESCHEDULE" | "CANCEL" } | null>(null);
   const [reason, setReason] = useState("");
   const [newDate, setNewDate] = useState("");
   const [newSlots, setNewSlots] = useState<string[]>([]);
@@ -83,8 +84,8 @@ export function MyBookingsClient({ initialBookings, email, policy }: {
     }
   }
 
-  function openRequest(id: string) {
-    setActive({ id, type: "RESCHEDULE" });
+  function openRequest(id: string, type: "RESCHEDULE" | "CANCEL") {
+    setActive({ id, type });
     setReason("");
     setNewDate("");
     setNewSlots([]);
@@ -112,7 +113,9 @@ export function MyBookingsClient({ initialBookings, email, policy }: {
       setError(data.error || "Unable to submit request.");
       return;
     }
-    setMessage("Your booking was rescheduled successfully.");
+    setMessage(active.type === "CANCEL"
+      ? `Your booking was cancelled. ₹${data.credit?.toLocaleString("en-IN") || "0"} has been added to your ElfCoins wallet and does not expire.`
+      : "Your booking was rescheduled successfully.");
     setActive(null);
     router.refresh();
   }
@@ -140,7 +143,7 @@ export function MyBookingsClient({ initialBookings, email, policy }: {
 
       <div className="mx-auto max-w-6xl px-4 py-8 md:px-8">
         <div className="mb-8 rounded-2xl border border-orange-400/20 bg-orange-400/10 p-4 text-sm text-orange-100">
-          You may reschedule instantly until <strong>{policy.cutoffHours} hours</strong> before your session. A new date may be up to <strong>{policy.extensionDays} days after</strong> the original date. Customer cancellation is not available and payments are non-refundable.
+          You may reschedule or cancel instantly until <strong>{policy.cutoffHours} hours</strong> before your session. A new date may be up to <strong>{policy.extensionDays} days after</strong> the original date. Cancellation moves the paid booking value to your <Link href="/wallet" className="font-bold underline">ElfCoins Wallet</Link>, not back to your bank/card. Cancellation credit does not expire and can be used at your next booking.
         </div>
         {message && <p role="status" className="mb-6 rounded-xl bg-green-500/15 p-4 text-sm text-green-300">{message}</p>}
         <p className="mb-6 text-sm text-white/50">Signed in as {email}</p>
@@ -169,11 +172,11 @@ export function MyBookingsClient({ initialBookings, email, policy }: {
                   <div className="flex gap-3"><Music2 className="h-5 w-5 text-orange-400"/><div><dt className="sr-only">Booking details</dt><dd>{booking.attendees} attendees · ₹{booking.totalAmount.toLocaleString("en-IN")}</dd></div></div>
                 </dl>
 
-                {confirmed && (
-                  <div className="mt-6">
-                    <button onClick={() => openRequest(booking.id)} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-white text-xs font-bold uppercase text-black hover:bg-orange-300"><RotateCcw className="h-4 w-4"/>Reschedule booking</button>
-                  </div>
-                )}
+                {confirmed && <div className="mt-6 grid gap-3 sm:grid-cols-2">
+                  <button onClick={() => openRequest(booking.id, "RESCHEDULE")} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl bg-white text-xs font-bold uppercase text-black hover:bg-orange-300"><RotateCcw className="h-4 w-4"/>Reschedule booking</button>
+                  <button onClick={() => openRequest(booking.id, "CANCEL")} className="flex min-h-12 w-full items-center justify-center gap-2 rounded-xl border border-red-300/50 text-xs font-bold uppercase text-red-200 hover:bg-red-500/10"><XCircle className="h-4 w-4"/>Cancel to wallet</button>
+                </div>}
+                {booking.status === "CANCELLED" && booking.cancellationCreditCoins > 0 && <div className="mt-6 rounded-xl border border-orange-400/30 bg-orange-400/10 p-4 text-sm text-orange-100"><strong>₹{booking.cancellationCreditCoins.toLocaleString("en-IN")} moved to your ElfCoins wallet.</strong><br/><span className="text-orange-100/70">This booking credit does not expire. Use it automatically by choosing ElfCoins Wallet at your next checkout.</span></div>}
               </article>
             );
           })}
@@ -188,7 +191,7 @@ export function MyBookingsClient({ initialBookings, email, policy }: {
               <button onClick={() => setActive(null)} aria-label="Close" className="h-11 w-11 rounded-full bg-white/10 text-2xl">×</button>
             </div>
 
-            {(
+            {active.type === "RESCHEDULE" && (
               <div className="mt-6 space-y-5">
                 <div>
                   <label htmlFor="new-date" className="mb-2 block text-xs uppercase tracking-widest text-white/50">New date</label>
@@ -211,10 +214,11 @@ export function MyBookingsClient({ initialBookings, email, policy }: {
               <label htmlFor="reason" className="mb-2 block text-xs uppercase tracking-widest text-white/50">Reason (optional)</label>
               <textarea id="reason" value={reason} maxLength={1000} onChange={(event) => setReason(event.target.value)} className="min-h-24 w-full rounded-xl border border-white/15 bg-black p-4 text-white" placeholder="Tell us anything the studio should know"/>
             </div>
+            {active.type === "CANCEL" && <div className="mt-5 rounded-xl border border-orange-400/30 bg-orange-400/10 p-4 text-sm text-orange-100"><strong>₹{selectedBooking.totalAmount.toLocaleString("en-IN")} will move to your ElfCoins wallet.</strong><br/><span className="text-orange-100/70">It is not sent back to your bank/card. This cancellation credit does not expire and will be available at your next checkout.</span></div>}
             {error && <p role="alert" className="mt-4 rounded-xl bg-red-500/15 p-3 text-sm text-red-300">{error}</p>}
             <div className="mt-6 flex gap-3">
               <button onClick={() => setActive(null)} className="min-h-12 flex-1 rounded-xl border border-white/15">Back</button>
-              <button disabled={submitting || !newDate || newSlots.length !== selectedBooking.slots.length} onClick={submitRequest} className="min-h-12 flex-[2] rounded-xl bg-white font-bold text-black disabled:opacity-40">{submitting ? "Rescheduling…" : "Confirm reschedule"}</button>
+              <button disabled={submitting || (active.type === "RESCHEDULE" && (!newDate || newSlots.length !== selectedBooking.slots.length))} onClick={submitRequest} className={`min-h-12 flex-[2] rounded-xl font-bold disabled:opacity-40 ${active.type === "CANCEL" ? "bg-red-500 text-white" : "bg-white text-black"}`}>{submitting ? "Saving…" : active.type === "CANCEL" ? "Confirm cancellation" : "Confirm reschedule"}</button>
             </div>
           </div>
         </div>

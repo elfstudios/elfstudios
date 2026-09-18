@@ -222,6 +222,7 @@ export async function sendBookingChangeNotification(
   booking: any,
   userEmail: string,
   action: "CANCELLED" | "RESCHEDULED",
+  cancellationCreditCoins?: number,
 ) {
   if (!SMTP_EMAIL || !SMTP_PASSWORD) return;
   const formattedDate = format(new Date(booking.date), "EEEE, MMMM d, yyyy");
@@ -234,6 +235,9 @@ export async function sendBookingChangeNotification(
   const subject = cancelled
     ? `Booking Cancelled - ${booking.ticketNumber || "Elf Jampad"}`
     : `Booking Rescheduled - ${booking.ticketNumber || "Elf Jampad"}`;
+  const creditMessage = cancelled && cancellationCreditCoins
+    ? `<div style="margin:24px 0;padding:16px;border-left:4px solid #ff6600;background:#fff7ed"><strong>₹${cancellationCreditCoins.toLocaleString("en-IN")} has been added to your ElfCoins wallet.</strong><br/>This is booking credit, not a refund to your bank or card. It does not expire and will be available automatically when you choose <strong>ElfCoins Wallet</strong> at your next checkout.</div>`
+    : "";
   const html = `
     <div style="font-family:Arial,sans-serif;max-width:600px;margin:auto;color:#111">
       <h1 style="color:#ff6600">Elf Jampad</h1>
@@ -241,6 +245,7 @@ export async function sendBookingChangeNotification(
       <p>Your booking for <strong>${escapeHtml(booking.bandName || "Jam Session")}</strong> has been ${cancelled ? "cancelled" : "rescheduled"}.</p>
       ${cancelled ? "" : `<p><strong>New date:</strong> ${escapeHtml(formattedDate)}<br/><strong>New time:</strong> ${escapeHtml(formattedSlots)}</p>`}
       <p><strong>Ticket:</strong> ${escapeHtml(booking.ticketNumber || "N/A")}</p>
+      ${creditMessage}
       <p style="color:#666">If you did not expect this change, contact Elf Studios immediately.</p>
     </div>`;
   await transporter.sendMail({ from: `"Elf Studios" <${SMTP_EMAIL}>`, to: userEmail, subject, html });

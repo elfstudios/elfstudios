@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   calculatePrice,
+  canRequestCancellation,
   canRequestReschedule,
   normalizeBookingDate,
   sessionEnd,
@@ -38,6 +39,12 @@ test("rescheduling closes forty-eight hours before the session", () => {
   const date = normalizeBookingDate("2026-05-05");
   assert.equal(canRequestReschedule(date, ["17"], new Date("2026-05-03T10:00:00.000Z")).allowed, true);
   assert.equal(canRequestReschedule(date, ["17"], new Date("2026-05-03T12:00:00.000Z")).allowed, false);
+});
+
+test("cancellation uses the same forty-eight hour cutoff", () => {
+  const date = normalizeBookingDate("2026-05-05");
+  assert.equal(canRequestCancellation(date, ["17"], new Date("2026-05-03T10:00:00.000Z")).allowed, true);
+  assert.equal(canRequestCancellation(date, ["17"], new Date("2026-05-03T12:00:00.000Z")).allowed, false);
 });
 
 test("session end uses the final booked hour in IST", () => {

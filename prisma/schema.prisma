@@ -87,6 +87,7 @@ model Booking {
   totalAmount      Float
   paymentMethod    String   @default("PAYU") // PAYU or WALLET
   walletCoins      Int      @default(0)
+  cancellationCreditCoins Int @default(0)
   
   status           String   @default("PENDING") // PENDING, CONFIRMED, CANCELLED
   paymentStatus    String   @default("UNPAID") // UNPAID, PENDING, PAID, FAILED, EXPIRED
@@ -161,7 +162,7 @@ model WalletLot {
   topUpId        String?             @unique
   originalCoins  Int
   remainingCoins Int
-  expiresAt      DateTime
+  expiresAt      DateTime?
   createdAt      DateTime            @default(now())
   transactions   WalletTransaction[]
 

@@ -1,0 +1,2 @@
+ALTER TABLE "Booking" ADD COLUMN "cancellationCreditCoins" INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE "WalletLot" ALTER COLUMN "expiresAt" DROP NOT NULL;
