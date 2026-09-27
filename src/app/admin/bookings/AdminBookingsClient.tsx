@@ -95,11 +95,11 @@ export function AdminBookingsClient({ initialBookings }: { initialBookings: Book
 
   return (
     <div className="space-y-6">
-      <div><h1 className="text-3xl font-black uppercase tracking-tighter">Manage Bookings</h1><p className="mt-2 text-gray-500">Cancel or reschedule any session. Customers are notified by email.</p></div>
+      <div><h1 className="text-3xl font-black uppercase tracking-tighter text-black">Manage Bookings</h1><p className="mt-2 text-gray-600">Cancel or reschedule any session. Customers are notified by email.</p></div>
       <div className="rounded-2xl border bg-white p-4">
         <div className="flex flex-col gap-3 lg:flex-row">
-        <label className="relative flex-1"><Search className="absolute left-3 top-3 h-5 w-5 text-gray-400"/><span className="sr-only">Search bookings</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search booking name, artist, ticket, email or phone" className="h-11 w-full rounded-xl border pl-10 pr-3 text-sm"/></label>
-        <select value={status} onChange={(event) => setStatus(event.target.value)} className="h-11 rounded-xl border px-3 text-sm"><option value="ALL">All statuses</option><option>CONFIRMED</option><option>PENDING</option><option>CANCELLED</option></select>
+        <label className="relative flex-1"><Search className="absolute left-3 top-3 h-5 w-5 text-gray-500"/><span className="sr-only">Search bookings</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search booking name, artist, ticket, email or phone" className="h-11 w-full rounded-xl border bg-white pl-10 pr-3 text-sm text-black placeholder:text-gray-500"/></label>
+        <select value={status} onChange={(event) => setStatus(event.target.value)} className="h-11 rounded-xl border bg-white px-3 text-sm text-black"><option value="ALL">All statuses</option><option>CONFIRMED</option><option>PENDING</option><option>CANCELLED</option></select>
           <button onClick={downloadExport} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-black px-4 text-sm font-bold text-white hover:bg-black/80"><Download className="h-4 w-4"/>Download Excel</button>
         </div>
         <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
