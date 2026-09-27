@@ -15,7 +15,7 @@ type Booking = {
 };
 const HOURS = Array.from({ length: 12 }, (_, index) => String(index + 11));
 const fmtHour = (hour: number) => `${hour % 12 || 12}:00 ${hour >= 12 ? "PM" : "AM"}`;
-const slotLabel = (slot: string) => `${fmtHour(Number(slot))}–${fmtHour(Number(slot) + 1)}`;
+const slotLabel = (slot: string) => `${fmtHour(Number(slot))} – ${fmtHour(Number(slot) + 1)}`;
 const displayDate = (date: string) => new Intl.DateTimeFormat("en-IN", { dateStyle: "medium", timeZone: "UTC" }).format(new Date(date));
 
 export function AdminBookingsClient({ initialBookings }: { initialBookings: Booking[] }) {
@@ -95,18 +95,18 @@ export function AdminBookingsClient({ initialBookings }: { initialBookings: Book
 
   return (
     <div className="space-y-6">
-      <div><h1 className="text-3xl font-black uppercase tracking-tighter text-black">Manage Bookings</h1><p className="mt-2 text-gray-600">Cancel or reschedule any session. Customers are notified by email.</p></div>
+      <div><h1 className="text-3xl font-black uppercase tracking-tighter !text-black">Manage Bookings</h1><p className="mt-2 text-gray-700">Cancel or reschedule any session. Customers are notified by email.</p></div>
       <div className="rounded-2xl border bg-white p-4">
         <div className="flex flex-col gap-3 lg:flex-row">
-        <label className="relative flex-1"><Search className="absolute left-3 top-3 h-5 w-5 text-gray-500"/><span className="sr-only">Search bookings</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search booking name, artist, ticket, email or phone" className="h-11 w-full rounded-xl border bg-white pl-10 pr-3 text-sm text-black placeholder:text-gray-500"/></label>
-        <select value={status} onChange={(event) => setStatus(event.target.value)} className="h-11 rounded-xl border bg-white px-3 text-sm text-black"><option value="ALL">All statuses</option><option>CONFIRMED</option><option>PENDING</option><option>CANCELLED</option></select>
+        <label className="relative flex-1"><Search className="absolute left-3 top-3 h-5 w-5 text-gray-500"/><span className="sr-only">Search bookings</span><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search booking name, artist, ticket, email or phone" className="h-11 w-full rounded-xl border bg-white pl-10 pr-3 text-sm !text-black placeholder:!text-gray-500"/></label>
+        <select value={status} onChange={(event) => setStatus(event.target.value)} className="h-11 rounded-xl border bg-white px-3 text-sm !text-black"><option value="ALL">All statuses</option><option>CONFIRMED</option><option>PENDING</option><option>CANCELLED</option></select>
           <button onClick={downloadExport} className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-black px-4 text-sm font-bold text-white hover:bg-black/80"><Download className="h-4 w-4"/>Download Excel</button>
         </div>
         <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <label className="text-xs font-semibold text-gray-500">Booking date from<input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} className="mt-1 h-10 w-full rounded-lg border px-3 text-sm text-black"/></label>
-          <label className="text-xs font-semibold text-gray-500">Booking date to<input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} className="mt-1 h-10 w-full rounded-lg border px-3 text-sm text-black"/></label>
-          <label className="text-xs font-semibold text-gray-500">Minimum amount<input type="number" min="0" value={minAmount} onChange={(event) => setMinAmount(event.target.value)} placeholder="₹0" className="mt-1 h-10 w-full rounded-lg border px-3 text-sm text-black"/></label>
-          <label className="text-xs font-semibold text-gray-500">Maximum amount<input type="number" min="0" value={maxAmount} onChange={(event) => setMaxAmount(event.target.value)} placeholder="Any amount" className="mt-1 h-10 w-full rounded-lg border px-3 text-sm text-black"/></label>
+          <label className="text-xs font-semibold text-gray-600">Booking date from<input type="date" value={dateFrom} onChange={(event) => setDateFrom(event.target.value)} className="mt-1 h-10 w-full rounded-lg border bg-white px-3 text-sm !text-black"/></label>
+          <label className="text-xs font-semibold text-gray-600">Booking date to<input type="date" value={dateTo} onChange={(event) => setDateTo(event.target.value)} className="mt-1 h-10 w-full rounded-lg border bg-white px-3 text-sm !text-black"/></label>
+          <label className="text-xs font-semibold text-gray-600">Minimum amount<input type="number" min="0" value={minAmount} onChange={(event) => setMinAmount(event.target.value)} placeholder="₹0" className="mt-1 h-10 w-full rounded-lg border bg-white px-3 text-sm !text-black placeholder:!text-gray-500"/></label>
+          <label className="text-xs font-semibold text-gray-600">Maximum amount<input type="number" min="0" value={maxAmount} onChange={(event) => setMaxAmount(event.target.value)} placeholder="Any amount" className="mt-1 h-10 w-full rounded-lg border bg-white px-3 text-sm !text-black placeholder:!text-gray-500"/></label>
         </div>
       </div>
       <div className="grid gap-4 xl:grid-cols-2">

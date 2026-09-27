@@ -18,25 +18,50 @@ async function readPayUResponse(req: Request) {
 }
 
 async function confirmOrder(orderId: string, paymentId: string | undefined) {
-  const updated = await prisma.$transaction(async (tx) => {
-    const changed = await tx.bookingOrder.updateMany({
-      where: { id: orderId, status: "PENDING" },
-      data: { status: "CONFIRMED", paymentStatus: "PAID", paidAt: new Date(), expiresAt: null, payuPaymentId: paymentId || null },
+  const result = await prisma.$transaction(async (tx) => {
+    const current = await tx.bookingOrder.findUnique({ where: { id: orderId }, include: { bookings: true } });
+    if (!current) return { outcome: "MISSING" as const, order: null };
+    if (current.status === "CONFIRMED") return { outcome: "ALREADY_CONFIRMED" as const, order: null };
+
+    // A gateway can return just after the short checkout hold ends. Recover it only
+    // when every original slot is still free; never overwrite another booking.
+    if (current.status === "CANCELLED" && current.paymentStatus === "EXPIRED") {
+      for (const booking of current.bookings) {
+        const [bookingConflict, blockConflict] = await Promise.all([
+          tx.booking.findFirst({
+            where: {
+              orderId: { not: orderId }, date: booking.date, slots: { hasSome: booking.slots },
+              OR: [{ status: "CONFIRMED" }, { status: "PENDING", expiresAt: { gt: new Date() } }],
+            }, select: { id: true },
+          }),
+          tx.calendarBlock.findFirst({ where: { date: booking.date, slots: { hasSome: booking.slots } }, select: { id: true } }),
+        ]);
+        if (bookingConflict || blockConflict) return { outcome: "SLOT_CONFLICT" as const, order: null };
+      }
+    } else if (current.status !== "PENDING") {
+      return { outcome: "NOT_CONFIRMABLE" as const, order: null };
+    }
+
+    const now = new Date();
+    await tx.bookingOrder.update({
+      where: { id: orderId },
+      data: { status: "CONFIRMED", paymentStatus: "PAID", paidAt: now, expiresAt: null, payuPaymentId: paymentId || null },
     });
-    if (!changed.count) return null;
     await tx.booking.updateMany({
-      where: { orderId, status: "PENDING" },
-      data: { status: "CONFIRMED", paymentStatus: "PAID", paidAt: new Date(), expiresAt: null, payuPaymentId: paymentId || null },
+      where: { orderId, status: { in: ["PENDING", "CANCELLED"] } },
+      data: { status: "CONFIRMED", paymentStatus: "PAID", paidAt: now, expiresAt: null, payuPaymentId: paymentId || null, cancelledAt: null, cancelledBy: null },
     });
-    return tx.bookingOrder.findUniqueOrThrow({
-      where: { id: orderId }, include: { bookings: { include: { user: true } }, user: true },
-    });
+    return {
+      outcome: "CONFIRMED" as const,
+      order: await tx.bookingOrder.findUniqueOrThrow({ where: { id: orderId }, include: { bookings: { include: { user: true } }, user: true } }),
+    };
   });
-  if (!updated) return;
-  const effects: Promise<unknown>[] = updated.bookings.map(syncBookingToGoogleCalendar);
-  if (updated.user.email) effects.push(sendOrderConfirmation(updated, updated.bookings, updated.user.email));
+  if (!result.order) return result.outcome;
+  const effects: Promise<unknown>[] = result.order.bookings.map(syncBookingToGoogleCalendar);
+  if (result.order.user.email) effects.push(sendOrderConfirmation(result.order, result.order.bookings, result.order.user.email));
   const results = await Promise.allSettled(effects);
   results.filter((result) => result.status === "rejected").forEach((result) => console.error("Order confirmation side effect failed:", result.reason));
+  return result.outcome;
 }
 
 async function failOrder(orderId: string) {
@@ -87,7 +112,13 @@ async function handleCallback(req: Request) {
         if (!await verifyPaymentWithPayU(txnid, Number(order.totalAmount).toFixed(2))) {
           return htmlRedirect(`${siteUrl}/booking/error?reason=verification-pending`);
         }
-        await confirmOrder(order.id, response.mihpayid);
+        const outcome = await confirmOrder(order.id, response.mihpayid);
+        if (outcome === "SLOT_CONFLICT") {
+          return htmlRedirect(`${siteUrl}/booking/error?reason=paid-slot-conflict`);
+        }
+        if (outcome === "MISSING" || outcome === "NOT_CONFIRMABLE") {
+          return htmlRedirect(`${siteUrl}/booking/error?reason=confirmation-unavailable`);
+        }
         return htmlRedirect(`${siteUrl}/booking/success?txnid=${encodeURIComponent(txnid)}`);
       }
       if (status === "pending") return htmlRedirect(`${siteUrl}/booking/error?reason=payment-pending`);

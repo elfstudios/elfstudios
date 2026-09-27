@@ -1,6 +1,8 @@
 const DEFAULT_CHANGE_CUTOFF_HOURS = 48;
 const DEFAULT_RESCHEDULE_EXTENSION_DAYS = 7;
-const DEFAULT_PENDING_HOLD_MINUTES = 15;
+// A payment gateway can take a few minutes to return a customer. Thirty minutes
+// avoids losing a valid payment while still releasing abandoned checkouts.
+const DEFAULT_PENDING_HOLD_MINUTES = 30;
 
 export const BOOKING_POLICY = {
   changeCutoffHours: readPositiveInt(
@@ -11,8 +13,8 @@ export const BOOKING_POLICY = {
     process.env.RESCHEDULE_EXTENSION_DAYS,
     DEFAULT_RESCHEDULE_EXTENSION_DAYS,
   ),
-  pendingHoldMinutes: readPositiveInt(
-    process.env.PENDING_BOOKING_HOLD_MINUTES,
+  pendingHoldMinutes: Math.max(
+    readPositiveInt(process.env.PENDING_BOOKING_HOLD_MINUTES, DEFAULT_PENDING_HOLD_MINUTES),
     DEFAULT_PENDING_HOLD_MINUTES,
   ),
   openingHour: 11,

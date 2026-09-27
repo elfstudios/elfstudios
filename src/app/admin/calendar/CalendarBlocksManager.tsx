@@ -25,8 +25,8 @@ function todayKey() {
 
 function slotLabel(slot: string) {
   const hour = Number(slot);
-  const display = hour > 12 ? hour - 12 : hour;
-  return `${display} ${hour >= 12 ? "PM" : "AM"}`;
+  const display = (value: number) => `${value % 12 || 12}:00 ${value >= 12 ? "PM" : "AM"}`;
+  return `${display(hour)} – ${display(hour + 1)}`;
 }
 
 function dateLabel(value: string) {
