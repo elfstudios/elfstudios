@@ -28,7 +28,7 @@ export async function sendBookingConfirmation(booking: any, userEmail: string) {
     return;
   }
 
-  const { ticketNumber, bandName, bookingName, date, slots, totalAmount, equipmentRequests, user } = booking;
+  const { ticketNumber, bandName, bookingName, date, slots, totalAmount, walletCoins = 0, equipmentRequests, user } = booking;
   const formattedDate = format(new Date(date), "EEEE, MMMM d, yyyy");
   
   // Convert slot strings to readable times (e.g. "10" -> "10:00 AM - 11:00 AM")
@@ -50,6 +50,12 @@ export async function sendBookingConfirmation(booking: any, userEmail: string) {
   const safeEquipmentRequests = escapeHtml(equipmentRequests);
   const safeUserEmail = escapeHtml(userEmail);
   const safeUserPhone = escapeHtml(userPhone);
+  const onlineAmount = Math.max(0, Number(totalAmount) - Number(walletCoins));
+  const paymentRows = walletCoins > 0
+    ? `<tr><td style="padding: 12px 0; border-bottom: 1px solid #333; color: #888;">Session price</td><td style="padding: 12px 0; border-bottom: 1px solid #333; font-weight: bold; text-align: right;">₹${totalAmount}</td></tr>
+          <tr><td style="padding: 12px 0; border-bottom: 1px solid #333; color: #888;">ElfCoins applied</td><td style="padding: 12px 0; border-bottom: 1px solid #333; font-weight: bold; text-align: right; color: #ffb36b;">−₹${walletCoins}</td></tr>
+          <tr><td style="padding: 12px 0; border-bottom: 1px solid #333; color: #888;">Paid online</td><td style="padding: 12px 0; border-bottom: 1px solid #333; font-weight: bold; text-align: right; color: #4ade80;">₹${onlineAmount}</td></tr>`
+    : `<tr><td style="padding: 12px 0; border-bottom: 1px solid #333; color: #888;">Total Amount</td><td style="padding: 12px 0; border-bottom: 1px solid #333; font-weight: bold; text-align: right; color: #4ade80;">₹${totalAmount}</td></tr>`;
 
   // Customer Email HTML
   const customerHtml = `
@@ -86,10 +92,7 @@ export async function sendBookingConfirmation(booking: any, userEmail: string) {
             <td style="padding: 12px 0; border-bottom: 1px solid #333; color: #888;">Time Slots</td>
             <td style="padding: 12px 0; border-bottom: 1px solid #333; font-weight: bold; text-align: right;">${formattedSlots}</td>
           </tr>
-          <tr>
-            <td style="padding: 12px 0; border-bottom: 1px solid #333; color: #888;">Total Amount</td>
-            <td style="padding: 12px 0; border-bottom: 1px solid #333; font-weight: bold; text-align: right; color: #4ade80;">₹${totalAmount}</td>
-          </tr>
+          ${paymentRows}
         </table>
         
         ${equipmentRequests ? `
@@ -120,7 +123,8 @@ export async function sendBookingConfirmation(booking: any, userEmail: string) {
         <tr><td style="padding: 8px; border-bottom: 1px solid #eee; font-weight: bold;">Phone:</td><td style="padding: 8px; border-bottom: 1px solid #eee;">${safeUserPhone}</td></tr>
         <tr><td style="padding: 8px; border-bottom: 1px solid #eee; font-weight: bold;">Date:</td><td style="padding: 8px; border-bottom: 1px solid #eee;">${formattedDate}</td></tr>
         <tr><td style="padding: 8px; border-bottom: 1px solid #eee; font-weight: bold;">Slots:</td><td style="padding: 8px; border-bottom: 1px solid #eee;">${formattedSlots}</td></tr>
-        <tr><td style="padding: 8px; border-bottom: 1px solid #eee; font-weight: bold;">Amount Paid:</td><td style="padding: 8px; border-bottom: 1px solid #eee;">₹${totalAmount}</td></tr>
+        <tr><td style="padding: 8px; border-bottom: 1px solid #eee; font-weight: bold;">Session price:</td><td style="padding: 8px; border-bottom: 1px solid #eee;">₹${totalAmount}</td></tr>
+        ${walletCoins > 0 ? `<tr><td style="padding: 8px; border-bottom: 1px solid #eee; font-weight: bold;">ElfCoins applied:</td><td style="padding: 8px; border-bottom: 1px solid #eee;">−₹${walletCoins}</td></tr><tr><td style="padding: 8px; border-bottom: 1px solid #eee; font-weight: bold;">Paid online:</td><td style="padding: 8px; border-bottom: 1px solid #eee;">₹${onlineAmount}</td></tr>` : ""}
         <tr><td style="padding: 8px; border-bottom: 1px solid #eee; font-weight: bold;">Equipment:</td><td style="padding: 8px; border-bottom: 1px solid #eee;">${safeEquipmentRequests || "None"}</td></tr>
       </table>
     </div>
@@ -176,6 +180,11 @@ export async function sendOrderConfirmation(order: any, bookings: any[], userEma
   const safeBookingName = escapeHtml(order.bookingName || order.user?.name || "Musician");
   const safeName = escapeHtml(order.user?.name || "Musician");
   const total = Number(order.totalAmount).toLocaleString("en-IN");
+  const walletCoins = bookings.reduce((sum, booking) => sum + Number(booking.walletCoins || 0), 0);
+  const bookingTotal = (Number(order.totalAmount) + walletCoins).toLocaleString("en-IN");
+  const paymentSummary = walletCoins > 0
+    ? `<p style="font-size:22px;font-weight:bold;text-align:right;margin-top:26px">Booking total: <span style="color:#fff">₹${bookingTotal}</span><br/><span style="font-size:15px;color:#ffb36b">ElfCoins applied: −₹${walletCoins.toLocaleString("en-IN")}</span><br/>Paid online: <span style="color:#86efac">₹${total}</span></p>`
+    : `<p style="font-size:22px;font-weight:bold;text-align:right;margin-top:26px">Paid: <span style="color:#86efac">₹${total}</span></p>`;
   const loyalty = order.freeHours > 0
     ? `<p style="margin:16px 0 0;color:#86efac">Loyalty credit applied: ${order.freeHours} free hour${order.freeHours === 1 ? "" : "s"}.</p>`
     : "";
@@ -187,7 +196,7 @@ export async function sendOrderConfirmation(order: any, bookings: any[], userEma
         <p><strong>Booking name:</strong> ${safeBookingName}<br/><strong>Artist / band:</strong> ${safeBand}</p>
         <table style="width:100%;border-collapse:collapse;margin-top:20px"><thead><tr><th style="text-align:left;color:#aaa;font-size:12px">DATE & TIME</th><th style="text-align:right;color:#aaa;font-size:12px">TICKET</th></tr></thead><tbody>${sessions}</tbody></table>
         ${loyalty}
-        <p style="font-size:22px;font-weight:bold;text-align:right;margin-top:26px">Paid: <span style="color:#86efac">₹${total}</span></p>
+        ${paymentSummary}
       </div>
     </div>`;
   const adminHtml = `
@@ -195,7 +204,7 @@ export async function sendOrderConfirmation(order: any, bookings: any[], userEma
       <p><strong>Booking name:</strong> ${safeBookingName}</p>
       <p><strong>Artist / band:</strong> ${safeBand}</p>
       <p><strong>Customer account:</strong> ${safeName} (${escapeHtml(userEmail)})</p>
-      <p><strong>Paid:</strong> ₹${total}${order.freeHours ? ` · ${order.freeHours} loyalty free hour${order.freeHours === 1 ? "" : "s"}` : ""}</p>
+      <p><strong>Booking total:</strong> ₹${bookingTotal}${walletCoins ? `<br/><strong>ElfCoins applied:</strong> −₹${walletCoins.toLocaleString("en-IN")}<br/><strong>Paid online:</strong> ₹${total}` : `<br/><strong>Paid:</strong> ₹${total}`}${order.freeHours ? ` · ${order.freeHours} loyalty free hour${order.freeHours === 1 ? "" : "s"}` : ""}</p>
       <table style="width:100%;border-collapse:collapse"><tbody>${sessions.replaceAll("#333", "#eee")}</tbody></table>
     </div>`;
   try {

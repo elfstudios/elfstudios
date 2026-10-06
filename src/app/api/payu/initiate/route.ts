@@ -13,7 +13,8 @@ import {
 } from "@/lib/booking-policy";
 import { sendOrderConfirmation } from "@/lib/mail";
 import { syncBookingToGoogleCalendar } from "@/lib/google-calendar";
-import { spendWalletCoins } from "@/lib/wallet";
+import { availableWalletCoins, spendWalletCoins } from "@/lib/wallet";
+import { expirePendingBookingOrders } from "@/lib/booking-payment";
 
 type BookingSession = { date: Date; slots: string[] };
 
@@ -73,7 +74,7 @@ export async function POST(req: Request) {
     const bandName = String(body.bandName || "").trim().slice(0, 120);
     const bookingName = String(body.bookingName || "").trim().slice(0, 120);
     const equipmentRequests = String(body.equipmentRequests || "").trim().slice(0, 2000) || null;
-    const paymentMethod = body.paymentMethod === "WALLET" ? "WALLET" : "PAYU";
+    const useWallet = body.paymentMethod === "WALLET";
     if (!bandName || !bookingName) return NextResponse.json({ error: "Booking name and artist name are required." }, { status: 400 });
 
     const totalHours = sessions.reduce((sum, session) => sum + session.slots.length, 0);
@@ -94,16 +95,9 @@ export async function POST(req: Request) {
       return formatRupees(billableHours * price.pricePerHourPaise);
     });
 
-    const order = await prisma.$transaction(async (tx) => {
-      await tx.booking.updateMany({
-        where: { status: "PENDING", expiresAt: { lt: now } },
-        data: { status: "CANCELLED", paymentStatus: "EXPIRED", cancelledAt: now, cancelledBy: "SYSTEM" },
-      });
-      await tx.bookingOrder.updateMany({
-        where: { status: "PENDING", expiresAt: { lt: now } },
-        data: { status: "CANCELLED", paymentStatus: "EXPIRED", cancelledAt: now, cancelledBy: "SYSTEM" },
-      });
+    await expirePendingBookingOrders(now);
 
+    const order = await prisma.$transaction(async (tx) => {
       for (const session of sessions) {
         const conflict = await tx.booking.findFirst({
           where: {
@@ -127,6 +121,22 @@ export async function POST(req: Request) {
         update: { email: auth.user.email || undefined, name: name || undefined, phone: phone || undefined },
       });
 
+      // ElfCoins can pay all or part of a booking. For a split payment, debit
+      // the available coins now and send only the remainder through PayU.
+      const walletDiscount = useWallet
+        ? Math.min(await availableWalletCoins(tx, auth.user.id), Math.round(totalAmount))
+        : 0;
+      const payuAmount = totalAmount - walletDiscount;
+      const resolvedPaymentMethod = walletDiscount > 0
+        ? payuAmount > 0 ? "PAYU_WALLET" : "WALLET"
+        : "PAYU";
+      let remainingWalletCoins = walletDiscount;
+      const sessionWalletCoins = sessionAmounts.map((sessionAmount) => {
+        const coins = Math.min(remainingWalletCoins, Math.round(sessionAmount));
+        remainingWalletCoins -= coins;
+        return coins;
+      });
+
       const order = await tx.bookingOrder.create({
         data: {
           userId: auth.user.id,
@@ -134,10 +144,10 @@ export async function POST(req: Request) {
           bandName,
           bookingName,
           equipmentRequests,
-          totalAmount,
+          totalAmount: payuAmount,
           totalHours,
           freeHours: price.freeHours,
-          paymentMethod,
+          paymentMethod: resolvedPaymentMethod,
           status: "PENDING",
           paymentStatus: "PENDING",
           payuTxnId: txnid,
@@ -154,7 +164,8 @@ export async function POST(req: Request) {
               bandName,
               bookingName,
               totalAmount: sessionAmounts[index],
-              paymentMethod,
+              paymentMethod: resolvedPaymentMethod,
+              walletCoins: sessionWalletCoins[index],
               status: "PENDING",
               paymentStatus: "PENDING",
               expiresAt,
@@ -163,13 +174,16 @@ export async function POST(req: Request) {
         },
         include: { bookings: { include: { user: true } }, user: true },
       });
-      if (paymentMethod !== "WALLET") return order;
       for (const booking of order.bookings) {
-        const coins = Math.round(booking.totalAmount);
-        await spendWalletCoins(tx, auth.user.id, coins, booking.id);
+        if (booking.walletCoins > 0) {
+          await spendWalletCoins(tx, auth.user.id, booking.walletCoins, booking.id);
+        }
+      }
+      if (resolvedPaymentMethod !== "WALLET") return order;
+      for (const booking of order.bookings) {
         await tx.booking.update({
           where: { id: booking.id },
-          data: { status: "CONFIRMED", paymentStatus: "PAID", paidAt: now, expiresAt: null, paymentMethod: "WALLET", walletCoins: coins },
+          data: { status: "CONFIRMED", paymentStatus: "PAID", paidAt: now, expiresAt: null, paymentMethod: "WALLET" },
         });
       }
       await tx.bookingOrder.update({
@@ -181,7 +195,7 @@ export async function POST(req: Request) {
       });
     }, { isolationLevel: "Serializable" });
 
-    if (paymentMethod === "WALLET") {
+    if (order.paymentMethod === "WALLET") {
       const effects: Promise<unknown>[] = order.bookings.map(syncBookingToGoogleCalendar);
       if (order.user.email) effects.push(sendOrderConfirmation(order, order.bookings, order.user.email));
       await Promise.allSettled(effects);
@@ -215,7 +229,7 @@ export async function POST(req: Request) {
     const payuData: Record<string, string> = {
       key: PAYU_MERCHANT_KEY,
       txnid,
-      amount: totalAmount.toFixed(2),
+      amount: Number(order.totalAmount).toFixed(2),
       productinfo: `Elf Jampad ${sessions.length > 1 ? "Multi-session" : "Session"} Booking`,
       firstname: name?.split(" ")[0] || "Musician",
       email: auth.user.email || "",

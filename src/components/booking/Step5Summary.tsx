@@ -38,6 +38,8 @@ export function Step5Summary({
   const freeHours = Math.floor(totalHours / 10);
   const discount = freeHours * pricePerHour;
   const total = subtotal - discount;
+  const walletDiscount = paymentMethod === "WALLET" ? Math.min(walletBalance, total) : 0;
+  const payuAmount = total - walletDiscount;
 
   useEffect(() => {
     fetch("/api/wallet", { cache: "no-store" })
@@ -170,11 +172,12 @@ export function Step5Summary({
               <button type="button" onClick={() => setPaymentMethod("PAYU")} className={`rounded-xl border p-3 text-left text-xs ${paymentMethod === "PAYU" ? "border-white bg-white text-black" : "border-white/10 bg-black/20 text-white"}`}>
                 <strong className="block">UPI / Card</strong><span className="mt-1 block opacity-60">Pay ₹{total}</span>
               </button>
-              <button type="button" disabled={walletLoading || walletBalance < total} onClick={() => setPaymentMethod("WALLET")} className={`rounded-xl border p-3 text-left text-xs disabled:cursor-not-allowed disabled:opacity-40 ${paymentMethod === "WALLET" ? "border-orange-400 bg-orange-400 text-black" : "border-white/10 bg-black/20 text-white"}`}>
-                <strong className="block">Pay with ElfCoins</strong><span className="mt-1 block opacity-60">{walletLoading ? "Checking balance…" : `${walletBalance.toLocaleString("en-IN")} coins available`}</span>
+              <button type="button" disabled={walletLoading || walletBalance <= 0} onClick={() => setPaymentMethod("WALLET")} className={`rounded-xl border p-3 text-left text-xs disabled:cursor-not-allowed disabled:opacity-40 ${paymentMethod === "WALLET" ? "border-orange-400 bg-orange-400 text-black" : "border-white/10 bg-black/20 text-white"}`}>
+                <strong className="block">Use ElfCoins</strong><span className="mt-1 block opacity-60">{walletLoading ? "Checking balance…" : `${walletBalance.toLocaleString("en-IN")} coins available`}</span>
               </button>
             </div>
-            {!walletLoading && walletBalance < total && <p className="mt-2 text-[10px] text-orange-300">Insufficient balance — top up or pay by card/UPI.</p>}
+            {!walletLoading && walletBalance > 0 && walletBalance < total && <p className="mt-2 text-[10px] text-orange-300">₹{walletBalance.toLocaleString("en-IN")} ElfCoins will be applied. Pay the remaining ₹{payuAmount.toLocaleString("en-IN")} by card or UPI.</p>}
+            {!walletLoading && walletBalance <= 0 && <p className="mt-2 text-[10px] text-orange-300">No ElfCoins available — top up or pay by card/UPI.</p>}
           </div>
 
           <div className="flex justify-between items-end pt-2">
@@ -185,6 +188,7 @@ export function Step5Summary({
             </div>
           </div>
           {discount > 0 && <p className="text-right font-mono text-[10px] uppercase tracking-widest text-green-400">Loyalty reward: {freeHours} free hour{freeHours === 1 ? "" : "s"} · −₹{discount}</p>}
+          {walletDiscount > 0 && <p className="text-right font-mono text-[10px] uppercase tracking-widest text-orange-300">ElfCoins applied: −₹{walletDiscount.toLocaleString("en-IN")}{payuAmount > 0 ? ` · PayU balance ₹${payuAmount.toLocaleString("en-IN")}` : " · Fully covered"}</p>}
         </div>
       </div>
 
@@ -209,7 +213,7 @@ export function Step5Summary({
           disabled={loading}
           className="h-[50px] px-8 bg-white text-black hover:bg-white/90 font-bold tracking-widest uppercase transition-all rounded-xl text-[11px] shadow-sm transform hover:-translate-y-0.5 disabled:opacity-50 disabled:hover:translate-y-0"
         >
-          {loading ? "Processing..." : paymentMethod === "WALLET" ? `Pay with ${total} coins` : `Pay ₹${total}`}
+          {loading ? "Processing..." : paymentMethod === "WALLET" ? payuAmount > 0 ? `Use ${walletDiscount} ElfCoins · Pay ₹${payuAmount}` : `Pay with ${walletDiscount} ElfCoins` : `Pay ₹${total}`}
         </button>
       </div>
     </div>

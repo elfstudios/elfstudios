@@ -4,6 +4,7 @@ import { verifyHash, verifyPaymentWithPayU } from "@/lib/payu";
 import { sendBookingConfirmation, sendOrderConfirmation } from "@/lib/mail";
 import { syncBookingToGoogleCalendar } from "@/lib/google-calendar";
 import { confirmWalletTopUp } from "@/lib/wallet";
+import { cancelPendingBookingOrder } from "@/lib/booking-payment";
 
 function htmlRedirect(url: string) {
   return new NextResponse(
@@ -26,6 +27,9 @@ async function confirmOrder(orderId: string, paymentId: string | undefined) {
     // A gateway can return just after the short checkout hold ends. Recover it only
     // when every original slot is still free; never overwrite another booking.
     if (current.status === "CANCELLED" && current.paymentStatus === "EXPIRED") {
+      if (current.bookings.some((booking) => booking.walletCoins > 0)) {
+        return { outcome: "WALLET_CREDIT_RELEASED" as const, order: null };
+      }
       for (const booking of current.bookings) {
         const [bookingConflict, blockConflict] = await Promise.all([
           tx.booking.findFirst({
@@ -65,16 +69,7 @@ async function confirmOrder(orderId: string, paymentId: string | undefined) {
 }
 
 async function failOrder(orderId: string) {
-  await prisma.$transaction([
-    prisma.bookingOrder.updateMany({
-      where: { id: orderId, status: "PENDING" },
-      data: { status: "CANCELLED", paymentStatus: "FAILED", cancelledAt: new Date(), cancelledBy: "PAYU" },
-    }),
-    prisma.booking.updateMany({
-      where: { orderId, status: "PENDING" },
-      data: { status: "CANCELLED", paymentStatus: "FAILED", cancelledAt: new Date(), cancelledBy: "PAYU" },
-    }),
-  ]);
+  await cancelPendingBookingOrder(orderId, "PAYU");
 }
 
 async function handleCallback(req: Request) {
@@ -116,7 +111,7 @@ async function handleCallback(req: Request) {
         if (outcome === "SLOT_CONFLICT") {
           return htmlRedirect(`${siteUrl}/booking/error?reason=paid-slot-conflict`);
         }
-        if (outcome === "MISSING" || outcome === "NOT_CONFIRMABLE") {
+        if (outcome === "MISSING" || outcome === "NOT_CONFIRMABLE" || outcome === "WALLET_CREDIT_RELEASED") {
           return htmlRedirect(`${siteUrl}/booking/error?reason=confirmation-unavailable`);
         }
         return htmlRedirect(`${siteUrl}/booking/success?txnid=${encodeURIComponent(txnid)}`);

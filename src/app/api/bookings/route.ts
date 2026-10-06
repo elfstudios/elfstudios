@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { normalizeBookingDate } from "@/lib/booking-policy";
+import { expirePendingBookingOrders } from "@/lib/booking-payment";
 
 export const dynamic = "force-dynamic";
 
@@ -11,10 +12,7 @@ export async function GET(req: Request) {
   try {
     const targetDate = normalizeBookingDate(dateStr);
     const now = new Date();
-    await prisma.booking.updateMany({
-      where: { status: "PENDING", expiresAt: { lt: now } },
-      data: { status: "CANCELLED", paymentStatus: "EXPIRED", cancelledAt: now, cancelledBy: "SYSTEM" },
-    });
+    await expirePendingBookingOrders(now);
 
     const [bookings, blocks] = await Promise.all([
       prisma.booking.findMany({

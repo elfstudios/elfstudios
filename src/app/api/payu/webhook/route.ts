@@ -4,6 +4,7 @@ import { verifyHash } from "@/lib/payu";
 import { sendBookingConfirmation, sendOrderConfirmation } from "@/lib/mail";
 import { syncBookingToGoogleCalendar } from "@/lib/google-calendar";
 import { confirmWalletTopUp } from "@/lib/wallet";
+import { cancelPendingBookingOrder } from "@/lib/booking-payment";
 
 async function confirmOrder(orderId: string, paymentId: string | undefined) {
   const result = await prisma.$transaction(async (tx) => {
@@ -11,6 +12,9 @@ async function confirmOrder(orderId: string, paymentId: string | undefined) {
     if (!current) return { outcome: "MISSING" as const, order: null };
     if (current.status === "CONFIRMED") return { outcome: "ALREADY_CONFIRMED" as const, order: null };
     if (current.status === "CANCELLED" && current.paymentStatus === "EXPIRED") {
+      if (current.bookings.some((booking) => booking.walletCoins > 0)) {
+        return { outcome: "WALLET_CREDIT_RELEASED" as const, order: null };
+      }
       for (const booking of current.bookings) {
         const [bookingConflict, blockConflict] = await Promise.all([
           tx.booking.findFirst({
@@ -64,12 +68,7 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: "Transaction mismatch" }, { status: 409 });
       }
       if (status === "success") await confirmOrder(order.id, response.mihpayid);
-      else if (status !== "pending") {
-        await prisma.$transaction([
-          prisma.bookingOrder.updateMany({ where: { id: order.id, status: "PENDING" }, data: { status: "CANCELLED", paymentStatus: "FAILED", cancelledAt: new Date(), cancelledBy: "PAYU" } }),
-          prisma.booking.updateMany({ where: { orderId: order.id, status: "PENDING" }, data: { status: "CANCELLED", paymentStatus: "FAILED", cancelledAt: new Date(), cancelledBy: "PAYU" } }),
-        ]);
-      }
+      else if (status !== "pending") await cancelPendingBookingOrder(order.id, "PAYU");
       return NextResponse.json({ status: "ok" });
     }
 

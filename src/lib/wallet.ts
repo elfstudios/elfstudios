@@ -1,9 +1,9 @@
 import { prisma } from "@/lib/prisma";
 
 export const WALLET_TIERS = [
-  { id: "4000", amount: 4000, coins: 4600, validityDays: 30, bonus: 15 },
-  { id: "8000", amount: 8000, coins: 9600, validityDays: 60, bonus: 20 },
-  { id: "12000", amount: 12000, coins: 15000, validityDays: 90, bonus: 25 },
+  { id: "4000", amount: 4000, coins: 4600, validityDays: 90, bonus: 15 },
+  { id: "8000", amount: 8000, coins: 9600, validityDays: 180, bonus: 20 },
+  { id: "12000", amount: 12000, coins: 15000, validityDays: 270, bonus: 25 },
 ] as const;
 
 export function findWalletTier(id: unknown) {
@@ -41,6 +41,19 @@ async function activeWallet(tx: any, userId: string) {
     data: { remainingCoins: 0 },
   });
   return wallet;
+}
+
+export async function availableWalletCoins(tx: any, userId: string) {
+  const wallet = await activeWallet(tx, userId);
+  const lots = await tx.walletLot.findMany({
+    where: {
+      walletId: wallet.id,
+      OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }],
+      remainingCoins: { gt: 0 },
+    },
+    select: { remainingCoins: true },
+  });
+  return lots.reduce((sum: number, lot: { remainingCoins: number }) => sum + lot.remainingCoins, 0);
 }
 
 export async function spendWalletCoins(tx: any, userId: string, coins: number, bookingId: string) {
