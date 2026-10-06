@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { CalendarDays, Clock, Download, Mail, Pencil, Phone, RotateCcw, Search, Trash2, Users, XCircle } from "lucide-react";
+import { CalendarDays, CheckCircle2, Clock, Download, Mail, Pencil, Phone, RotateCcw, Search, Trash2, Users, XCircle } from "lucide-react";
 
 type Booking = {
   id: string; bandName: string | null; bookingName: string | null; ticketNumber: string | null; attendees: number;
@@ -37,6 +37,7 @@ export function AdminBookingsClient({ initialBookings }: { initialBookings: Book
   const [bandName, setBandName] = useState("");
   const [attendees, setAttendees] = useState(1);
   const [equipmentRequests, setEquipmentRequests] = useState("");
+  const [pendingActionId, setPendingActionId] = useState<string | null>(null);
 
   const visible = useMemo(() => initialBookings.filter((booking) => {
     const text = `${booking.bookingName} ${booking.bandName} ${booking.ticketNumber} ${booking.user.name} ${booking.user.email} ${booking.user.phone}`.toLowerCase();
@@ -92,6 +93,26 @@ export function AdminBookingsClient({ initialBookings }: { initialBookings: Book
     if (!response.ok) return setError(data.error || "Unable to delete booking.");
     router.refresh();
   }
+  async function resolvePending(booking: Booking, action: "RECONCILE" | "CANCEL_PENDING") {
+    const isReconcile = action === "RECONCILE";
+    const prompt = isReconcile
+      ? `Check PayU and confirm ${booking.ticketNumber || "this booking"} only if the payment is verified?`
+      : `Cancel pending booking ${booking.ticketNumber || ""}? Any temporarily reserved ElfCoins will be returned.`;
+    if (!confirm(prompt)) return;
+    setPendingActionId(`${booking.id}:${action}`); setError("");
+    try {
+      const response = await fetch(`/api/admin/bookings/${booking.id}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Unable to update pending booking.");
+      router.refresh();
+    } catch (requestError) {
+      setError(requestError instanceof Error ? requestError.message : "Unable to update pending booking.");
+    } finally {
+      setPendingActionId(null);
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -118,6 +139,7 @@ export function AdminBookingsClient({ initialBookings }: { initialBookings: Book
             </div>
             {booking.order && <p className="mt-4 rounded-xl bg-orange-50 px-3 py-2 text-xs font-medium text-orange-800">Cart checkout · {booking.order.totalHours} total hour{booking.order.totalHours === 1 ? "" : "s"}{booking.order.freeHours ? ` · ${booking.order.freeHours} loyalty free hour${booking.order.freeHours === 1 ? "" : "s"}` : ""}</p>}
             {booking.status === "CANCELLED" && booking.cancellationCreditCoins > 0 && <p className="mt-4 rounded-xl bg-orange-50 px-3 py-2 text-xs font-medium text-orange-800">₹{booking.cancellationCreditCoins.toLocaleString("en-IN")} credited to the customer&apos;s non-expiring ElfCoins wallet.</p>}
+            {booking.status === "PENDING" && <div className="mt-5 rounded-xl border border-yellow-200 bg-yellow-50 p-3"><p className="text-xs text-yellow-800">Awaiting PayU confirmation. Verify with PayU before confirming; cancelling returns any reserved ElfCoins.</p><div className="mt-3 grid grid-cols-2 gap-3"><button disabled={!!pendingActionId} onClick={() => resolvePending(booking, "RECONCILE")} className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-black text-xs font-bold text-white disabled:opacity-50"><CheckCircle2 className="h-4 w-4"/>{pendingActionId === `${booking.id}:RECONCILE` ? "Checking PayU…" : "Verify & confirm"}</button><button disabled={!!pendingActionId} onClick={() => resolvePending(booking, "CANCEL_PENDING")} className="flex min-h-11 items-center justify-center gap-2 rounded-xl border border-red-200 text-xs font-bold text-red-600 disabled:opacity-50"><XCircle className="h-4 w-4"/>{pendingActionId === `${booking.id}:CANCEL_PENDING` ? "Cancelling…" : "Cancel pending"}</button></div></div>}
             {booking.status === "CONFIRMED" && <div className="mt-5 grid grid-cols-3 gap-3"><button onClick={() => open(booking, "EDIT")} className="flex min-h-11 items-center justify-center gap-2 rounded-xl border text-xs font-bold text-black"><Pencil className="h-4 w-4"/>Edit</button><button onClick={() => open(booking, "RESCHEDULE")} className="flex min-h-11 items-center justify-center gap-2 rounded-xl bg-black text-xs font-bold text-white"><RotateCcw className="h-4 w-4"/>Move</button><button onClick={() => open(booking, "CANCEL")} className="flex min-h-11 items-center justify-center gap-2 rounded-xl border border-red-200 text-xs font-bold text-red-600"><XCircle className="h-4 w-4"/>Cancel</button></div>}
             {booking.status === "CANCELLED" && <button onClick={() => remove(booking)} className="mt-5 flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-red-200 text-xs font-bold text-red-600"><Trash2 className="h-4 w-4"/>Delete cancelled booking</button>}
           </article>
